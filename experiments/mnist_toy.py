@@ -2,21 +2,22 @@ import torch
 import torchvision
 import torch.optim as optim
 import os
+import numpy as np
 import torch.nn.functional as F
 from models.image_recognition import MnistClassifier
 from visualization.images import plot_mnist
-
-
+from explainers.corpus import Corpus
 
 # Set Hyperparameters:
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-n_epochs = 3
+n_epochs = 10
 batch_size_train = 64
 batch_size_test = 1000
+corpus_size = 1000
 learning_rate = 0.01
 momentum = 0.5
 log_interval = 100
-random_seed = 1
+random_seed = 666
 torch.backends.cudnn.enabled = False
 torch.manual_seed(random_seed)
 load_model = True
@@ -104,15 +105,44 @@ if not load_model:
 classifier = MnistClassifier()
 classifier.load_state_dict(torch.load(os.path.join(save_path, 'model.pth')))
 classifier.to(device)
-with torch.no_grad():
-    test_id = 69
-    examples = enumerate(test_loader)
-    batch_idx, (example_data, example_targets) = next(examples)
-    example_data = example_data.to(device)
-    example_targets = example_targets.to(device)
-    output = classifier(example_data)
-    title = f'Prediction: {output.data.max(1, keepdim=True)[1][test_id].item()}'
-    plot_mnist(example_data[test_id][0].cpu().numpy(), title)
-    print(classifier.latent_representation(example_data)[test_id])
+classifier.eval()
+#with torch.no_grad():
+test_id = 0
+corpus_loader = torch.utils.data.DataLoader(
+    torchvision.datasets.MNIST('/data/', train=True, download=True,
+                               transform=torchvision.transforms.Compose([
+                                   torchvision.transforms.ToTensor(),
+                                   torchvision.transforms.Normalize(
+                                       (0.1307,), (0.3081,))
+                               ])),
+    batch_size=corpus_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(
+    torchvision.datasets.MNIST('/data/', train=False, download=True,
+                               transform=torchvision.transforms.Compose([
+                                   torchvision.transforms.ToTensor(),
+                                   torchvision.transforms.Normalize(
+                                       (0.1307,), (0.3081,))
+                               ])),
+    batch_size=100, shuffle=True)
+corpus_examples = enumerate(corpus_loader)
+test_examples = enumerate(test_loader)
+batch_id_test, (example_data, example_targets) = next(test_examples)
+batch_id_corpus, (corpus_data, corpus_target) = next(corpus_examples)
+corpus_data = corpus_data.to(device)
+corpus_target = corpus_target.to(device)
+example_data = example_data.to(device)
+example_targets = example_targets.to(device)
 
-    # Here: try the corpus explainer for a test example
+corpus = Corpus(examples=corpus_data.detach().cpu().numpy(),
+                latent_reps=(classifier.latent_representation(corpus_data)).detach().cpu().numpy())
+#weights = corpus.fit((classifier.latent_representation(example_data)).cpu().numpy(), decimals=4)
+weights = corpus.fit_torch(classifier.latent_representation(example_data).detach(), n_epoch=1000)
+decomposition = corpus.decompose(test_id)
+output = classifier(example_data)
+title = f'Prediction: {output.data.max(1, keepdim=True)[1][test_id].item()}'
+plot_mnist(example_data[test_id][0].cpu().numpy(), title)
+plot_mnist(decomposition[0][1][0], title=str(decomposition[0][0]))
+plot_mnist(decomposition[1][1][0], title=str(decomposition[1][0]))
+plot_mnist(decomposition[2][1][0], title=str(decomposition[2][0]))
+plot_mnist(decomposition[3][1][0], title=str(decomposition[3][0]))
+plot_mnist(decomposition[4][1][0], title=str(decomposition[4][0]))
