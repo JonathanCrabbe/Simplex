@@ -34,7 +34,7 @@ class Corpus:
         return weights
 
     def fit(self, test_latent_reps: torch.Tensor,
-            decimals=None, learning_rate=0.01, momentum=0.5, n_epoch=2000, reg_factor=1.0, fraction_keep=0.01,
+            learning_rate=0.01, momentum=0.5, n_epoch=2000, reg_factor=1.0, fraction_keep=0.01,
             reg_factor_scheduler=None):
         latent_reps = torch.from_numpy(self.latent_reps).to(test_latent_reps.device)
         n_test = test_latent_reps.shape[0]
