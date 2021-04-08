@@ -130,11 +130,13 @@ def fit_corpus(n_epoch=10000, corpus_size=1000, test_size=100, learning_rate=100
     example_targets = example_targets.to(device)
 
     reg_factor_scheduler = ExponentialScheduler(reg_factor_init, reg_factor_final, n_epoch)
-    corpus = Corpus(examples=corpus_data.detach().cpu().numpy(),
-                    latent_reps=(classifier.latent_representation(corpus_data)).detach().cpu().numpy())
-    weights = corpus.fit(classifier.latent_representation(example_data).detach(), n_epoch=n_epoch,
-                         learning_rate=learning_rate, momentum=momentum, reg_factor=reg_factor_init,
-                         fraction_keep=fraction_keep, reg_factor_scheduler=reg_factor_scheduler)
+    corpus = Corpus(corpus_examples=corpus_data.detach(),
+                    corpus_latent_reps=(classifier.latent_representation(corpus_data)).detach())
+    weights = corpus.fit(test_examples=example_data.detach(),
+                         test_latent_reps=classifier.latent_representation(example_data).detach(),
+                         n_epoch=n_epoch, learning_rate=learning_rate, momentum=momentum,
+                         reg_factor=reg_factor_init, fraction_keep=fraction_keep,
+                         reg_factor_scheduler=reg_factor_scheduler)
     corpus.plot_hist()
     corpus_path = os.path.join(save_path, 'corpus.pkl')
     with open(corpus_path, 'wb') as f:
@@ -142,25 +144,9 @@ def fit_corpus(n_epoch=10000, corpus_size=1000, test_size=100, learning_rate=100
         pkl.dump(corpus, f)
 
 
-def plot_decomposition(test_id=42, load_path='./experiments/results/mnist_toy/', random_seed=40, test_size=100):
-
-    # There is a problem here in matching the random seeds:
-    # find a way to recover the same test example as in the above function
-
+def plot_decomposition(test_id=2, load_path='./experiments/results/mnist_toy/', random_seed=40, n_plots: int = 10):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
-    test_loader = torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('/data/', train=False, download=True,
-                                   transform=torchvision.transforms.Compose([
-                                       torchvision.transforms.ToTensor(),
-                                       torchvision.transforms.Normalize(
-                                           (0.1307,), (0.3081,))
-                                   ])),
-        batch_size=test_size, shuffle=True)
-    test_examples = enumerate(test_loader)
-    batch_id_test, (example_data, example_targets) = next(test_examples)
-    example_data = example_data.to(device)
-    example_targets = example_targets.to(device)
     classifier = MnistClassifier()
     classifier.load_state_dict(torch.load(os.path.join(load_path, 'model.pth')))
     classifier.to(device)
@@ -169,15 +155,17 @@ def plot_decomposition(test_id=42, load_path='./experiments/results/mnist_toy/',
     with open(corpus_path, 'rb') as f:
         corpus = pkl.load(f)
     decomposition = corpus.decompose(test_id)
-    output = classifier(example_data)
+    output = classifier(corpus.test_examples.to(device))
     print(torch.exp(output[test_id]))
+    print(corpus.residual(test_id))
+    corpus.plot_residuals_CDF()
     title = f'Prediction: {output.data.max(1, keepdim=True)[1][test_id].item()}'
-    plot_mnist(example_data[test_id][0].cpu().numpy(), title)
-    plot_mnist(decomposition[0][1][0], title=str(decomposition[0][0]))
-    plot_mnist(decomposition[1][1][0], title=str(decomposition[1][0]))
-    plot_mnist(decomposition[2][1][0], title=str(decomposition[2][0]))
-    plot_mnist(decomposition[3][1][0], title=str(decomposition[3][0]))
-    plot_mnist(decomposition[4][1][0], title=str(decomposition[4][0]))
+    plot_mnist(corpus.test_examples[test_id][0].cpu().numpy(), title)
+    for i in range(n_plots):
+        data = decomposition[i][1][0].cpu().numpy()
+        title = f'Weight: {decomposition[i][0]:.3g}'
+        plot_mnist(data, title)
+
 
 
 #fit_corpus()
