@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
+import sklearn
 
 
 class Corpus:
@@ -19,25 +20,8 @@ class Corpus:
         self.test_examples = None
         self.test_latent_reps = None
 
-    def fit_cvxpy(self, test_latent_reps: np.ndarray, decimals=None):
-        n_test = test_latent_reps.shape[0]
-        weights = cp.Variable((n_test, self.corpus_size))
-        cost = cp.sum_squares(weights @ self.corpus_latent_reps - test_latent_reps)
-        obj = cp.Minimize(cost)
-        constr1 = weights @ np.ones(self.corpus_size) == np.ones(n_test)
-        constr2 = weights >= 0
-        constr = [constr1, constr2]
-        prob = cp.Problem(obj, constr)
-        prob.solve(verbose=False)
-        weights = weights.value
-        if decimals:
-            weights = np.round(weights, decimals)
-        self.weights = weights
-        self.n_test = n_test
-        return weights
-
     def fit(self, test_examples: torch.Tensor, test_latent_reps: torch.Tensor,
-            learning_rate=1.0, momentum=0.5, n_epoch=10000, reg_factor=1.0, fraction_keep=0.01,
+            learning_rate=1.0, momentum=0.5, n_epoch=10000, reg_factor=1.0, n_keep: int = 5,
             reg_factor_scheduler=None):
         n_test = test_latent_reps.shape[0]
         preweights = torch.zeros((n_test, self.corpus_size), device=test_latent_reps.device, requires_grad=True)
@@ -49,7 +33,7 @@ class Corpus:
             corpus_latent_reps = torch.einsum('ij,jk->ik', weights, self.corpus_latent_reps)
             error = ((corpus_latent_reps - test_latent_reps) ** 2).mean()
             weights_sorted = torch.sort(weights)[0]
-            regulator = (weights_sorted[:, :int((1 - fraction_keep) * self.corpus_size)]).mean()
+            regulator = (weights_sorted[:, : (self.corpus_size - n_keep)]).mean()
             loss = error + reg_factor * regulator
             loss.backward()
             optimizer.step()
@@ -85,12 +69,21 @@ class Corpus:
         plt.show()
 
     def residual(self, test_id: int, normalize: bool = True):
-        latent_rep = self.test_latent_reps[test_id].clone().detach().cpu().numpy()
-        corpus_latent_rep = (self.weights[test_id]) @ (self.corpus_latent_reps.clone().detach().cpu().numpy())
-        residual = np.sum((latent_rep - corpus_latent_rep) ** 2)
+        true_rep = self.test_latent_reps[test_id].clone().detach().cpu().numpy()
+        corpus_approx_rep = (self.weights[test_id]) @ (self.corpus_latent_reps.clone().detach().cpu().numpy())
+        residual = np.sum((true_rep - corpus_approx_rep) ** 2)
         if normalize:
-            residual /= np.sum(latent_rep**2)
+            residual /= np.sum(true_rep**2)
         return np.sqrt(residual)
+
+    def residual_statistics(self, normalize: bool = True):
+        true_reps = self.test_latent_reps.clone().detach().cpu().numpy()
+        corpus_approx_reps = self.weights @ (self.corpus_latent_reps.clone().detach().cpu().numpy())
+        residuals = np.sum((true_reps - corpus_approx_reps) ** 2, axis=-1)
+        if normalize:
+            residuals /= np.sum(true_reps ** 2, axis=-1)
+        residuals = np.sqrt(residuals)
+        return np.mean(residuals), np.std(residuals)
 
     def plot_residuals_CDF(self):
         sns.set()
@@ -107,8 +100,33 @@ class Corpus:
         stats_df.plot(x='residuals', y='cdf', grid=True,
                       xlabel='Normalized Residual', ylabel='Cumulative Distribution', legend=False)
 
+    def r2_score(self):
+        true_reps = self.test_latent_reps.clone().detach().cpu().numpy()
+        corpus_approx_reps = self.weights @ (self.corpus_latent_reps.clone().detach().cpu().numpy())
+        return sklearn.metrics.r2_score(true_reps, corpus_approx_reps)
+
     def to(self, device: torch.device):
         self.corpus_examples = self.corpus_examples.to(device)
         self.corpus_latent_reps = self.corpus_latent_reps.to(device)
         self.test_examples = self.test_examples.to(device)
         self.test_latent_reps = self.test_latent_reps.to(device)
+
+
+'''
+    def fit_cvxpy(self, test_latent_reps: np.ndarray, decimals=None):
+        n_test = test_latent_reps.shape[0]
+        weights = cp.Variable((n_test, self.corpus_size))
+        cost = cp.sum_squares(weights @ self.corpus_latent_reps - test_latent_reps)
+        obj = cp.Minimize(cost)
+        constr1 = weights @ np.ones(self.corpus_size) == np.ones(n_test)
+        constr2 = weights >= 0
+        constr = [constr1, constr2]
+        prob = cp.Problem(obj, constr)
+        prob.solve(verbose=False)
+        weights = weights.value
+        if decimals:
+            weights = np.round(weights, decimals)
+        self.weights = weights
+        self.n_test = n_test
+        return weights
+'''
