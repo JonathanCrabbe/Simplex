@@ -1,11 +1,8 @@
 import numpy as np
-import cvxpy as cp
-import pandas as pd
 import torch
 import torch.nn.functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
-import sklearn
 
 
 class Corpus:
@@ -45,12 +42,22 @@ class Corpus:
             hist = np.concatenate((hist,
                                    np.array([error.item(), regulator.item()]).reshape(1, 2)),
                                   axis=0)
-        self.weights = torch.softmax(preweights, dim=-1).clone().detach().cpu().numpy()
+        self.weights = torch.softmax(preweights, dim=-1).detach()
         self.test_examples = test_examples
         self.test_latent_reps = test_latent_reps
         self.n_test = n_test
         self.hist = hist
-        return self.weights
+
+    def to(self, device: torch.device):
+        self.corpus_examples = self.corpus_examples.to(device)
+        self.corpus_latent_reps = self.corpus_latent_reps.to(device)
+        self.test_examples = self.test_examples.to(device)
+        self.test_latent_reps = self.test_latent_reps.to(device)
+
+    def latent_approx(self):
+        approx_reps = self.weights @ self.corpus_latent_reps
+        return approx_reps
+
 
     def decompose(self, test_id):
         assert test_id < self.n_test
@@ -67,6 +74,12 @@ class Corpus:
         axs[1].plot(epochs, self.hist[:, 1])
         axs[1].set(xlabel='Epoch', ylabel='Regulator')
         plt.show()
+
+
+
+
+
+'''
 
     def residual(self, test_id: int, normalize: bool = True):
         true_rep = self.test_latent_reps[test_id].clone().detach().cpu().numpy()
@@ -100,19 +113,12 @@ class Corpus:
         stats_df.plot(x='residuals', y='cdf', grid=True,
                       xlabel='Normalized Residual', ylabel='Cumulative Distribution', legend=False)
 
-    def r2_score(self):
+    def latent_r2_score(self):
         true_reps = self.test_latent_reps.clone().detach().cpu().numpy()
         corpus_approx_reps = self.weights @ (self.corpus_latent_reps.clone().detach().cpu().numpy())
         return sklearn.metrics.r2_score(true_reps, corpus_approx_reps)
 
-    def to(self, device: torch.device):
-        self.corpus_examples = self.corpus_examples.to(device)
-        self.corpus_latent_reps = self.corpus_latent_reps.to(device)
-        self.test_examples = self.test_examples.to(device)
-        self.test_latent_reps = self.test_latent_reps.to(device)
 
-
-'''
     def fit_cvxpy(self, test_latent_reps: np.ndarray, decimals=None):
         n_test = test_latent_reps.shape[0]
         weights = cp.Variable((n_test, self.corpus_size))

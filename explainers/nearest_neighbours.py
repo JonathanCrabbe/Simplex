@@ -7,11 +7,7 @@ import sklearn
 
 
 class NearNeighLatent:
-    def __init__(self, corpus_examples, corpus_latent_reps, weights_type: str = 'uniform'):
-        if type(corpus_examples) == torch.Tensor:
-            corpus_examples = corpus_examples.clone().detach().cpu().numpy()
-        if type(corpus_latent_reps) == torch.Tensor:
-            corpus_latent_reps = corpus_latent_reps.clone().detach().cpu().numpy()
+    def __init__(self, corpus_examples: torch.Tensor, corpus_latent_reps: torch.Tensor, weights_type: str = 'uniform'):
         self.corpus_examples = corpus_examples
         self.corpus_latent_reps = corpus_latent_reps
         self.corpus_size = corpus_examples.shape[0]
@@ -23,18 +19,20 @@ class NearNeighLatent:
         self.test_latent_reps = None
         self.regressor = None
 
-    def fit(self, test_examples, test_latent_reps, n_keep: int = 5):
-        if type(test_examples) == torch.Tensor:
-            test_examples = test_examples.clone().detach().cpu().numpy()
-        if type(test_latent_reps) == torch.Tensor:
-            test_latent_reps = test_latent_reps.clone().detach().cpu().numpy()
+    def fit(self, test_examples: torch.Tensor, test_latent_reps: torch.Tensor, n_keep: int = 5):
         regressor = KNeighborsRegressor(n_neighbors=n_keep, weights=self.weights_type)
-        regressor.fit(self.corpus_latent_reps, self.corpus_latent_reps)
+        regressor.fit(self.corpus_latent_reps.clone().detach().cpu().numpy(),
+                      self.corpus_latent_reps.clone().detach().cpu().numpy())
+        self.regressor = regressor
         self.test_examples = test_examples
         self.n_test = test_examples.shape[0]
         self.test_latent_reps = test_latent_reps
-        self.regressor = regressor
 
+    def latent_approx(self):
+        approx_reps = self.regressor.predict(self.test_latent_reps.clone().detach().cpu().numpy())
+        return torch.from_numpy(approx_reps).type(torch.float32).to(self.test_latent_reps.device)
+
+'''
     def residual(self, test_id: int, normalize: bool = True):
         true_rep = self.test_latent_reps[test_id]
         corpus_approx_rep = self.regressor.predict([self.test_latent_reps[test_id]])
@@ -67,8 +65,8 @@ class NearNeighLatent:
         stats_df.plot(x='residuals', y='cdf', grid=True,
                       xlabel='Normalized Residual', ylabel='Cumulative Distribution', legend=False)
 
-    def r2_score(self):
+    def latent_r2_score(self):
         true_reps = self.test_latent_reps
         corpus_approx_reps = self.regressor.predict(self.test_latent_reps)
         return sklearn.metrics.r2_score(true_reps, corpus_approx_reps)
-
+'''

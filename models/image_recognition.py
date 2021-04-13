@@ -24,3 +24,16 @@ class MnistClassifier(nn.Module):
         x = self.latent_representation(x)
         x = self.fc2(x)
         return F.log_softmax(x, dim=-1)
+
+    def probabilities(self, x):
+        x = self.latent_representation(x)
+        x = self.fc2(x)
+        return F.softmax(x, dim=-1)
+
+    def presoftmax(self, x):
+        x = self.latent_representation(x)
+        return self.fc2(x)
+
+    def latent_to_presoftmax(self, h):
+        return self.fc2(h)
+
