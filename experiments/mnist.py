@@ -146,7 +146,7 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
                 test_latent_reps=test_latent_reps,
                 n_keep=n_keep)
     explainers.append(nn_dist)
-
+    '''
     # Fit representer
     representer = Representer(corpus_latent_reps=corpus_latent_reps,
                               corpus_probas=corpus_probas,
@@ -154,21 +154,100 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
                               reg_factor=model_reg_factor)
     representer.fit(test_latent_reps=test_latent_reps)
     explainers.append(representer)
-
-    # Save explainers:
+    '''
+    # Save explainers and data:
     for explainer, explainer_name in zip(explainers, explainers_name):
         explainer_path = os.path.join(save_path, f'{explainer_name}_cv{cv}_n{n_keep}.pkl')
         with open(explainer_path, 'wb') as f:
             print(f'Saving {explainer_name} decomposition in {explainer_path}.')
             pkl.dump(explainer, f)
+    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    with open(corpus_data_path, 'wb') as f:
+        print(f'Saving corpus data in {corpus_data_path}.')
+        pkl.dump([corpus_latent_reps, corpus_probas, corpus_true_classes], f)
+    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    with open(test_data_path, 'wb') as f:
+        print(f'Saving test data in {test_data_path}.')
+        pkl.dump([test_latent_reps, test_targets], f)
     return explainers
 
 
 # Approximation Quality experiment
-def approximation_quality(cv: int = 0, random_seed: int = 42, n_keep: int = 10, load_model: bool = False,
+def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
                           model_reg_factor=0.1, save_path: str = './results/mnist/'):
-    print(100*'-' + '\n'+'Welcome in the approximation quality experiment for MNIST. \n'
-          f'Settings: random_seed = {random_seed} ; n_keep = {n_keep} ; load_model = {load_model}.\n'
+    print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
+                             f'Settings: random_seed = {random_seed}.\n'
+          + 100 * '-')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    explainers_name = ['corpus', 'nn_uniform', 'nn_dist', 'representer']
+
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+    # Training a model, save it
+    print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+    train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=model_reg_factor)
+
+    # Load the model
+    classifier = MnistClassifier()
+    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.to(device)
+    classifier.eval()
+
+    # Fit the explainers
+    print(100 * '-' + '\n' + 'Now fitting the explainers. \n' + 100 * '-')
+    for i, n_keep in enumerate(n_keep_list):
+        print(100 * '-' + '\n' + f'Run number {i+1}/{len(n_keep_list)} . \n' + 100 * '-')
+        explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
+                                    n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
+                                    model_reg_factor=model_reg_factor)
+        # Print the partial results
+        print(100 * '-' + '\n' + 'Results. \n' + 100 * '-')
+        for explainer, explainer_name in zip(explainers, explainers_name[:-1]):
+            latent_rep_approx = explainer.latent_approx()
+            latent_rep_true = explainer.test_latent_reps
+            output_approx = classifier.latent_to_presoftmax(latent_rep_approx).detach()
+            output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
+            latent_r2_score = sklearn.metrics.r2_score(latent_rep_true.cpu().numpy(), latent_rep_approx.cpu().numpy())
+            output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
+            print(f'{explainer_name} latent r2: {latent_r2_score:.2g} ; output r2 = {output_r2_score:.2g}.')
+
+    # Fit the representer explainer (this is only makes sense by using the whole corpus)
+    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    with open(corpus_data_path, 'rb') as f:
+        corpus_latent_reps, corpus_probas, corpus_true_classes = pkl.load(f)
+    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    with open(test_data_path, 'rb') as f:
+        test_latent_reps, test_targets = pkl.load(f)
+    representer = Representer(corpus_latent_reps=corpus_latent_reps,
+                              corpus_probas=corpus_probas,
+                              corpus_true_classes=corpus_true_classes,
+                              reg_factor=model_reg_factor)
+    representer.fit(test_latent_reps=test_latent_reps)
+    explainer_path = os.path.join(save_path, f'representer_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving representer decomposition in {explainer_path}.')
+        pkl.dump(representer, f)
+    latent_rep_true = representer.test_latent_reps
+    output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
+    output_approx = representer.output_approx()
+    output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
+    print(f'representer output r2 = {output_r2_score:.2g}.')
+
+
+approximation_quality(n_keep_list=[n for n in range(2, 4)])
+
+# Make the repetitions automatic!
+
+
+'''
+
+def approximation_quality_single(cv: int = 0, random_seed: int = 42, n_keep: int = 10, load_model: bool = False,
+                                 model_reg_factor=0.1, save_path: str = './results/mnist/'):
+    print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
+                             f'Settings: random_seed = {random_seed} ; n_keep = {n_keep} ; load_model = {load_model}.\n'
           + 100 * '-')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     explainers_name = ['corpus', 'nn_uniform', 'nn_dist', 'representer']
@@ -212,7 +291,4 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, n_keep: int = 10, 
         output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
         print(f'{explainer_name} latent r2: {latent_r2_score:.2g} ; output r2 = {output_r2_score:.2g}.')
 
-
-approximation_quality(load_model=True)
-
-# Make the repetitions automatic!
+'''

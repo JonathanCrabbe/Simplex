@@ -34,7 +34,7 @@ class Corpus:
             loss = error + reg_factor * regulator
             loss.backward()
             optimizer.step()
-            if epoch % (n_epoch / 10) == 0:
+            if epoch % (n_epoch / 5) == 0:
                 print(f'Weight Fitting Epoch: {epoch}/{n_epoch} ; Error: {error.item():.3g} ;'
                       f' Regulator: {regulator.item():.3g}')
             if reg_factor_scheduler:
