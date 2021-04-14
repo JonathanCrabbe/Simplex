@@ -237,7 +237,7 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-approximation_quality(n_keep_list=[n for n in range(2, 4)])
+approximation_quality(n_keep_list=[n for n in range(2, 50)])
 
 # Make the repetitions automatic!
 
