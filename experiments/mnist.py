@@ -175,9 +175,9 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
 
 # Approximation Quality experiment
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                          model_reg_factor=0.1, save_path: str = './results/mnist/'):
+                          model_reg_factor=0.1, save_path: str = './experiments/results/mnist/'):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
-                             f'Settings: random_seed = {random_seed}.\n'
+                             f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']

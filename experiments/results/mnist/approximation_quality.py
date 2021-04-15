@@ -14,9 +14,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-CV = 0
+CV = 1
 n_keep_list = [n for n in range(2, 50)]
-explainer_names = ['corpus', 'nn_uniform', 'nn_dist']
+explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 results_df = pd.DataFrame(columns=['explainer', 'n_keep', 'cv', 'r2_latent', 'r2_output',
                                    'residual_latent', 'residual_output'])
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
