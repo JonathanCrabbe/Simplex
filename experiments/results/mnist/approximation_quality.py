@@ -12,6 +12,7 @@ from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
 import pandas as pd
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 CV = 0
 n_keep_list = [n for n in range(2, 50)]
@@ -41,6 +42,9 @@ for cv in range(CV + 1):
                                             'r2_latent': latent_r2_score, 'r2_output': output_r2_score,
                                             'residual_latent': residual_latent, 'residual_output': residual_output},
                                            ignore_index=True)
-
-print(results_df.loc[results_df['explainer'] == 'corpus'])
-# Use the dataframe to generate plots
+sns.set()
+for explainer_name, group in results_df.groupby('explainer'):
+    plt.plot(group['n_keep'], group['r2_latent'], label=f'{explainer_name}', linestyle='-')
+    plt.plot(group['n_keep'], group['r2_output'], label=f'{explainer_name}', linestyle=':')
+    plt.legend()
+plt.show()

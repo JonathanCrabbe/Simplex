@@ -3,6 +3,7 @@ import torchvision
 import torch.optim as optim
 import os
 import sklearn
+import argparse
 import pickle as pkl
 import torch.nn.functional as F
 from models.image_recognition import MnistClassifier
@@ -15,7 +16,7 @@ from utils.schedulers import ExponentialScheduler
 # Load data
 def load_mnist(batch_size: int, train: bool):
     return torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('/data/', train=train, download=True,
+        torchvision.datasets.MNIST('./data/', train=train, download=True,
                                    transform=torchvision.transforms.Compose([
                                        torchvision.transforms.ToTensor(),
                                        torchvision.transforms.Normalize(
@@ -179,7 +180,7 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
                              f'Settings: random_seed = {random_seed}.\n'
           + 100 * '-')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    explainers_name = ['corpus', 'nn_uniform', 'nn_dist', 'representer']
+    explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']
 
     # Create saving directory if inexistent
     if not os.path.exists(save_path):
@@ -199,7 +200,7 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     # Fit the explainers
     print(100 * '-' + '\n' + 'Now fitting the explainers. \n' + 100 * '-')
     for i, n_keep in enumerate(n_keep_list):
-        print(100 * '-' + '\n' + f'Run number {i+1}/{len(n_keep_list)} . \n' + 100 * '-')
+        print(100 * '-' + '\n' + f'Run number {i + 1}/{len(n_keep_list)} . \n' + 100 * '-')
         explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
                                     n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
                                     model_reg_factor=model_reg_factor)
@@ -237,10 +238,18 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-approximation_quality(n_keep_list=[n for n in range(2, 50)])
+def main(experiment: str, cv: int):
+    if experiment == 'approximation_quality':
+        approximation_quality(cv=cv, n_keep_list=[n for n in range(2, 51)])
 
-# Make the repetitions automatic!
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
+parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
+args = parser.parse_args()
+
+if __name__ == '__main__':
+    main(args.experiment, args.cv)
 
 '''
 
