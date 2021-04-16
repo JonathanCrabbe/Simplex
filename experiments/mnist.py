@@ -297,7 +297,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     weights = corpus.fit(test_examples=test_data,
                          test_latent_reps=test_latent_reps,
                          n_epoch=10000, learning_rate=100.0, momentum=0.5,
-                         reg_factor=0, n_keep=test_data.shape[0],
+                         reg_factor=0, n_keep=corpus_data.shape[0],
                          reg_factor_scheduler=reg_factor_scheduler)
     test_latent_approx = corpus.latent_approx()
     test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx)**2).mean(dim=-1))
