@@ -12,6 +12,7 @@ from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
 from visualization.images import plot_mnist
+import matplotlib.pyplot as plt
 
 
 # Load data
@@ -198,7 +199,7 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
 
 # Approximation Quality experiment
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                          model_reg_factor=0.1, save_path: str = './experiments/results/mnist/'):
+                          model_reg_factor=0.1, save_path: str = './results/mnist/quality/'):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
@@ -246,12 +247,26 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/'):
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/'):
 
     torch.random.manual_seed(random_seed)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for MNIST. \n'
+                             f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
+          + 100 * '-')
 
-    # Load model:
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+    # Training a model, save it
+    '''
+    print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+    train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
+    '''
+
+    # Load the model
     classifier = MnistClassifier()
     classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
     classifier.to(device)
@@ -270,9 +285,26 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     emnist_test_examples = enumerate(emnist_test_loader)
     batch_id_test_emnist, (emnist_test_data, emnist_test_target) = next(emnist_test_examples)
     emnist_test_data = emnist_test_data.to(device).detach()
-    plot_mnist(emnist_test_data[99, 0].cpu().numpy())
+    test_data = torch.cat([mnist_test_data, emnist_test_data], dim=0)
 
+    corpus_latent_reps = classifier.latent_representation(corpus_data).detach()
+    test_latent_reps = classifier.latent_representation(test_data).detach()
 
+    # Fit corpus:
+    reg_factor_scheduler = ExponentialScheduler(1, 1, n_epoch=1)
+    corpus = Corpus(corpus_examples=corpus_data,
+                    corpus_latent_reps=corpus_latent_reps)
+    weights = corpus.fit(test_examples=test_data,
+                         test_latent_reps=test_latent_reps,
+                         n_epoch=10000, learning_rate=100.0, momentum=0.5,
+                         reg_factor=0, n_keep=test_data.shape[0],
+                         reg_factor_scheduler=reg_factor_scheduler)
+    test_latent_approx = corpus.latent_approx()
+    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx)**2).mean(dim=-1))
+    n_inspected = [n for n in range(test_data.shape[0])]
+    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1]>99) for n in n_inspected]
+    plt.plot(n_inspected, n_detected)
+    plt.show()
 
 
 def main(experiment: str, cv: int):
