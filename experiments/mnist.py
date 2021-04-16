@@ -11,6 +11,7 @@ from explainers.corpus import Corpus
 from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
+from visualization.images import plot_mnist
 
 
 # Load data
@@ -22,6 +23,17 @@ def load_mnist(batch_size: int, train: bool):
                                        torchvision.transforms.Normalize(
                                            (0.1307,), (0.3081,))
                                    ])),
+        batch_size=batch_size, shuffle=True)
+
+
+def load_emnist(batch_size: int, train: bool):
+    return torch.utils.data.DataLoader(
+        torchvision.datasets.EMNIST('./data/', train=train, download=True, split='letters',
+                                    transform=torchvision.transforms.Compose([
+                                        torchvision.transforms.ToTensor(),
+                                        torchvision.transforms.Normalize(
+                                            (0.1307,), (0.3081,))
+                                    ])),
         batch_size=batch_size, shuffle=True)
 
 
@@ -95,9 +107,7 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
 # Train explainers
 def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
                    n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./results/mnist/',
-                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=1000, cv: int = 0,
-                   model_reg_factor=0.01
-                   ):
+                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=1000, cv: int = 0):
     torch.random.manual_seed(random_seed + cv)
     explainers = []
 
@@ -147,15 +157,7 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
                 test_latent_reps=test_latent_reps,
                 n_keep=n_keep)
     explainers.append(nn_dist)
-    '''
-    # Fit representer
-    representer = Representer(corpus_latent_reps=corpus_latent_reps,
-                              corpus_probas=corpus_probas,
-                              corpus_true_classes=corpus_true_classes,
-                              reg_factor=model_reg_factor)
-    representer.fit(test_latent_reps=test_latent_reps)
-    explainers.append(representer)
-    '''
+
     # Save explainers and data:
     for explainer, explainer_name in zip(explainers, explainers_name):
         explainer_path = os.path.join(save_path, f'{explainer_name}_cv{cv}_n{n_keep}.pkl')
@@ -171,6 +173,27 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
         print(f'Saving test data in {test_data_path}.')
         pkl.dump([test_latent_reps, test_targets], f)
     return explainers
+
+
+# Fit a representer
+def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
+    # Fit the representer explainer (this is only makes sense by using the whole corpus)
+    corpus_data_path = os.path.join(load_path, f'corpus_data_cv{cv}.pkl')
+    with open(corpus_data_path, 'rb') as f:
+        corpus_latent_reps, corpus_probas, corpus_true_classes = pkl.load(f)
+    test_data_path = os.path.join(load_path, f'test_data_cv{cv}.pkl')
+    with open(test_data_path, 'rb') as f:
+        test_latent_reps, test_targets = pkl.load(f)
+    representer = Representer(corpus_latent_reps=corpus_latent_reps,
+                              corpus_probas=corpus_probas,
+                              corpus_true_classes=corpus_true_classes,
+                              reg_factor=model_reg_factor)
+    representer.fit(test_latent_reps=test_latent_reps)
+    explainer_path = os.path.join(load_path, f'representer_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving representer decomposition in {explainer_path}.')
+        pkl.dump(representer, f)
+    return representer
 
 
 # Approximation Quality experiment
@@ -202,8 +225,7 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     for i, n_keep in enumerate(n_keep_list):
         print(100 * '-' + '\n' + f'Run number {i + 1}/{len(n_keep_list)} . \n' + 100 * '-')
         explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
-                                    n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
-                                    model_reg_factor=model_reg_factor)
+                                    n_keep=n_keep, save_path=save_path, explainers_name=explainers_name)
         # Print the partial results
         print(100 * '-' + '\n' + 'Results. \n' + 100 * '-')
         for explainer, explainer_name in zip(explainers, explainers_name[:-1]):
@@ -216,26 +238,41 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
             print(f'{explainer_name} latent r2: {latent_r2_score:.2g} ; output r2 = {output_r2_score:.2g}.')
 
     # Fit the representer explainer (this is only makes sense by using the whole corpus)
-    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
-    with open(corpus_data_path, 'rb') as f:
-        corpus_latent_reps, corpus_probas, corpus_true_classes = pkl.load(f)
-    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
-    with open(test_data_path, 'rb') as f:
-        test_latent_reps, test_targets = pkl.load(f)
-    representer = Representer(corpus_latent_reps=corpus_latent_reps,
-                              corpus_probas=corpus_probas,
-                              corpus_true_classes=corpus_true_classes,
-                              reg_factor=model_reg_factor)
-    representer.fit(test_latent_reps=test_latent_reps)
-    explainer_path = os.path.join(save_path, f'representer_cv{cv}.pkl')
-    with open(explainer_path, 'wb') as f:
-        print(f'Saving representer decomposition in {explainer_path}.')
-        pkl.dump(representer, f)
+    representer = fit_representer(model_reg_factor, save_path, cv)
     latent_rep_true = representer.test_latent_reps
     output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
     output_approx = representer.output_approx()
     output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
     print(f'representer output r2 = {output_r2_score:.2g}.')
+
+
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/'):
+
+    torch.random.manual_seed(random_seed)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Load model:
+    classifier = MnistClassifier()
+    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.to(device)
+    classifier.eval()
+
+    # Load data:
+    corpus_loader = load_mnist(batch_size=1000, train=True)
+    mnist_test_loader = load_mnist(batch_size=100, train=False)
+    emnist_test_loader = load_emnist(batch_size=100, train=True)
+    corpus_examples = enumerate(corpus_loader)
+    batch_id_corpus, (corpus_data, corpus_target) = next(corpus_examples)
+    corpus_data = corpus_data.to(device).detach()
+    mnist_test_examples = enumerate(mnist_test_loader)
+    batch_id_test_mnist, (mnist_test_data, mnist_test_target) = next(mnist_test_examples)
+    mnist_test_data = mnist_test_data.to(device).detach()
+    emnist_test_examples = enumerate(emnist_test_loader)
+    batch_id_test_emnist, (emnist_test_data, emnist_test_target) = next(emnist_test_examples)
+    emnist_test_data = emnist_test_data.to(device).detach()
+    plot_mnist(emnist_test_data[99, 0].cpu().numpy())
+
+
 
 
 def main(experiment: str, cv: int):
@@ -249,7 +286,8 @@ parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    main(args.experiment, args.cv)
+    #main(args.experiment, args.cv)
+    outlier_detection(args.cv)
 
 '''
 

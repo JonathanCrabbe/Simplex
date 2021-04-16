@@ -118,3 +118,4 @@ dmypy.json
 
 # Simplex
 experiments/results/*
+experiments/data/*
