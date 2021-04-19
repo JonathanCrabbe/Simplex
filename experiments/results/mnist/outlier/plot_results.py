@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 
-CV = 1
+CV = 9
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble': r'\usepackage{amsmath}'}
@@ -44,7 +44,8 @@ plt.plot(n_inspected, metrics[1].mean(axis=-1), color='red', label='Random')
 plt.fill_between(n_inspected, metrics[1].mean(axis=-1) - metrics[1].std(axis=-1),
                  metrics[1].mean(axis=-1) + metrics[1].std(axis=-1), alpha=0.3)
 plt.plot(n_inspected, counts_ideal, color='green', label='Ideal')
-plt.xlabel('Number of inspected examples')
+plt.xlabel('Number of examples inspected')
 plt.ylabel('Number of outliers detected')
 plt.legend()
+plt.savefig('outlier.pdf', bbox_inches='tight')
 plt.show()
