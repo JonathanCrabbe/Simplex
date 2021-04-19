@@ -2,6 +2,7 @@ import torch
 import torchvision
 import torch.optim as optim
 import os
+import seaborn as sns
 import sklearn
 import argparse
 import pickle as pkl
@@ -247,9 +248,9 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
+# Outlier Detection experiment
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/'):
-
-    torch.random.manual_seed(random_seed)
+    torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -261,10 +262,9 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
         os.makedirs(save_path)
 
     # Training a model, save it
-    '''
+
     print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
     train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
-    '''
 
     # Load the model
     classifier = MnistClassifier()
@@ -286,7 +286,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     batch_id_test_emnist, (emnist_test_data, emnist_test_target) = next(emnist_test_examples)
     emnist_test_data = emnist_test_data.to(device).detach()
     test_data = torch.cat([mnist_test_data, emnist_test_data], dim=0)
-
     corpus_latent_reps = classifier.latent_representation(corpus_data).detach()
     test_latent_reps = classifier.latent_representation(test_data).detach()
 
@@ -299,17 +298,26 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
                          n_epoch=10000, learning_rate=100.0, momentum=0.5,
                          reg_factor=0, n_keep=corpus_data.shape[0],
                          reg_factor_scheduler=reg_factor_scheduler)
+    explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving representer decomposition in {explainer_path}.')
+        pkl.dump(corpus, f)
     test_latent_approx = corpus.latent_approx()
-    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx)**2).mean(dim=-1))
+    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx) ** 2).mean(dim=-1))
     n_inspected = [n for n in range(test_data.shape[0])]
-    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1]>99) for n in n_inspected]
+    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1] > 99) for n in n_inspected]
+    sns.set()
     plt.plot(n_inspected, n_detected)
+    plt.xlabel('Number of inspected examples')
+    plt.ylabel('Number of outliers detected')
     plt.show()
 
 
 def main(experiment: str, cv: int):
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv, n_keep_list=[n for n in range(2, 51)])
+    elif experiment == 'outlier':
+        outlier_detection(cv)
 
 
 parser = argparse.ArgumentParser()
@@ -318,8 +326,7 @@ parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    #main(args.experiment, args.cv)
-    outlier_detection(args.cv)
+    main(args.experiment, args.cv)
 
 '''
 
