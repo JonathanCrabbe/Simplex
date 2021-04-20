@@ -7,15 +7,21 @@ class MortalityPredictor(nn.Module):
     def __init__(self, n_cont):
         super().__init__()
         self.n_cont = n_cont
-        self.lin1 = nn.Linear(26, 200)
-        self.lin2 = nn.Linear(200, 70)
-        self.lin3 = nn.Linear(70, 2)
+        self.lin1 = nn.Linear(26, 100)
+        self.lin2 = nn.Linear(100, 10)
+        self.lin3 = nn.Linear(10, 2)
         self.bn1 = nn.BatchNorm1d(self.n_cont)
-        self.bn2 = nn.BatchNorm1d(200)
-        self.bn3 = nn.BatchNorm1d(70)
+        self.bn2 = nn.BatchNorm1d(100)
+        self.bn3 = nn.BatchNorm1d(10)
         self.drops = nn.Dropout(0.3)
 
     def forward(self, x):
+        x = self.latent_representation(x)
+        x = self.lin3(x)
+        x = F.log_softmax(x, dim=-1)
+        return x
+
+    def latent_representation(self, x):
         x_cont, x_disc = x[:, :self.n_cont], x[:, self.n_cont:]
         x_cont = self.bn1(x_cont)
         x = torch.cat([x_cont, x_disc], 1)
@@ -25,5 +31,14 @@ class MortalityPredictor(nn.Module):
         x = F.relu(self.lin2(x))
         x = self.drops(x)
         x = self.bn3(x)
+        return x
+
+    def probabilities(self, x):
+        x = self.latent_representation(x)
+        x = self.lin3(x)
+        x = F.softmax(x, dim=-1)
+        return x
+
+    def latent_to_presoftmax(self, x):
         x = self.lin3(x)
         return x

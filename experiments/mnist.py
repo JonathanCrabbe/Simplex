@@ -59,7 +59,6 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
     train_losses = []
     train_counter = []
     test_losses = []
-    test_counter = [i * len(train_loader.dataset) for i in range(n_epoch + 1)]
 
     def train(epoch):
         classifier.train()
@@ -89,7 +88,7 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
                 data = data.to(device)
                 target = target.to(device)
                 output = classifier(data)
-                test_loss += F.nll_loss(output, target, size_average=False).item()
+                test_loss += F.nll_loss(output, target, reduction='sum').item()
                 pred = output.data.max(1, keepdim=True)[1]
                 correct += pred.eq(target.data.view_as(pred)).sum()
         test_loss /= len(test_loader.dataset)
