@@ -193,7 +193,6 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
                              n_epoch=n_epoch_simplex, learning_rate=learning_rate_simplex, momentum=momentum_simplex,
                              reg_factor=reg_factor_init, n_keep=n_keep,
                              reg_factor_scheduler=reg_factor_scheduler)
-        corpus.plot_hist()
         explainers.append(corpus)
 
         # Fit nearest neighbors:
