@@ -66,10 +66,10 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     corpus_size = 100
     test_size = 100
     n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
-    reg_factor_init = 0.1
-    reg_factor_final = 100
+    reg_factor_init = 0.01
+    reg_factor_final = 10.0
     n_epoch_simplex = 10000
-    learning_rate_simplex = 1000.0
+    learning_rate_simplex = 100
     momentum_simplex = 0.5
 
 
@@ -193,6 +193,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
                              n_epoch=n_epoch_simplex, learning_rate=learning_rate_simplex, momentum=momentum_simplex,
                              reg_factor=reg_factor_init, n_keep=n_keep,
                              reg_factor_scheduler=reg_factor_scheduler)
+        corpus.plot_hist()
         explainers.append(corpus)
 
         # Fit nearest neighbors:

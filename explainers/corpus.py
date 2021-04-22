@@ -22,7 +22,8 @@ class Corpus:
             reg_factor_scheduler=None):
         n_test = test_latent_reps.shape[0]
         preweights = torch.zeros((n_test, self.corpus_size), device=test_latent_reps.device, requires_grad=True)
-        optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum)
+        #optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum)
+        optimizer = torch.optim.Adam([preweights])
         hist = np.zeros((0, 2))
         for epoch in range(n_epoch):
             optimizer.zero_grad()
