@@ -54,6 +54,7 @@ class Corpus:
         self.corpus_latent_reps = self.corpus_latent_reps.to(device)
         self.test_examples = self.test_examples.to(device)
         self.test_latent_reps = self.test_latent_reps.to(device)
+        self.weights = self.weights.to(device)
 
     def latent_approx(self):
         approx_reps = self.weights @ self.corpus_latent_reps

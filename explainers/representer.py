@@ -28,6 +28,13 @@ class Representer:
         output_approx = self.weights.sum(dim=1)
         return output_approx
 
+    def to(self, device:torch.device):
+        self.corpus_latent_reps = self.corpus_latent_reps.to(device)
+        self.corpus_probas = self.corpus_probas.to(device)
+        self.corpus_true_classes = self.corpus_true_classes.to(device)
+        self.test_latent_reps = self.test_latent_reps.to(device)
+        self.weights = self.weights.to(device)
+
 
 
 '''
