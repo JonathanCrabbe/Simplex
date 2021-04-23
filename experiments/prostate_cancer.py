@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import argparse
 import torch
 import sklearn
@@ -32,7 +33,7 @@ class ProstateCancerDataset(Dataset):
         return data, target
 
 
-def load_seer(random_seed: int=42):
+def load_seer(random_seed: int = 42):
     features = ['age', 'psa', 'comorbidities', 'treatment_CM', 'treatment_Primary hormone therapy',
                 'treatment_Radical Therapy-RDx', 'treatment_Radical therapy-Sx', 'grade_1.0', 'grade_2.0', 'grade_3.0',
                 'grade_4.0', 'grade_5.0', 'stage_1', 'stage_2', 'stage_3', 'stage_4', 'gleason1_1', 'gleason1_2',
@@ -45,6 +46,24 @@ def load_seer(random_seed: int=42):
     df_survive = df[~mask]
     df = pd.concat([df_dead.sample(12000, random_state=random_seed),
                     df_survive.sample(12000, random_state=random_seed)])
+    df = sklearn.utils.shuffle(df, random_state=random_seed)
+    df = df.reset_index(drop=True)
+    return df[features], df[label]
+
+
+def load_cutract(random_seed: int = 42):
+    features = ['age', 'psa', 'comorbidities', 'treatment_CM', 'treatment_Primary hormone therapy',
+                'treatment_Radical Therapy-RDx', 'treatment_Radical therapy-Sx', 'grade_1.0', 'grade_2.0', 'grade_3.0',
+                'grade_4.0', 'grade_5.0', 'stage_1', 'stage_2', 'stage_3', 'stage_4', 'gleason1_1', 'gleason1_2',
+                'gleason1_3', 'gleason1_4', 'gleason1_5', 'gleason2_1', 'gleason2_2', 'gleason2_3', 'gleason2_4',
+                'gleason2_5']
+    label = 'mortCancer'
+    df = pd.read_csv('./data/Prostate Cancer/cutract_internal_all.csv')
+    mask = df[label] == True
+    df_dead = df[mask]
+    df_survive = df[~mask]
+    df = pd.concat([df_dead.sample(1000, random_state=random_seed),
+                    df_survive.sample(1000, random_state=random_seed)])
     df = sklearn.utils.shuffle(df, random_state=random_seed)
     df = df.reset_index(drop=True)
     return df[features], df[label]
@@ -72,13 +91,12 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     learning_rate_simplex = 100
     momentum_simplex = 0.5
 
-
     if not os.path.exists(save_path):
         print(f'Creating the saving directory {save_path}')
         os.mkdir(save_path)
 
     # Load the data
-    X, y = load_seer(random_seed=random_seed+cv)
+    X, y = load_seer(random_seed=random_seed + cv)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=random_seed + cv,
                                                         stratify=y)
 
@@ -86,7 +104,6 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     train_loader = DataLoader(train_data, batch_size=50, shuffle=True)
     test_data = ProstateCancerDataset(X_test, y_test)
     test_loader = DataLoader(test_data, batch_size=50, shuffle=True)
-
 
     if train_model:
         # Create the model
@@ -169,7 +186,6 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     corpus_true_classes[torch.arange(corpus_size), corpus_target.type(torch.LongTensor)] = 1
     test_latent_reps = classifier.latent_representation(test_data).detach()
 
-
     # Save data:
     corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
     with open(corpus_data_path, 'wb') as f:
@@ -182,7 +198,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
 
     # Fit the explainers
     for n_keep in n_keep_list:
-        print(30*'-' + f'n_keep = {n_keep}' + 30*'-')
+        print(30 * '-' + f'n_keep = {n_keep}' + 30 * '-')
         explainers = []
         # Fit corpus:
         reg_factor_scheduler = ExponentialScheduler(reg_factor_init, reg_factor_final, n_epoch_simplex)
@@ -241,14 +257,178 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
+# Outlier Detection experiment
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/prostate/outlier/',
+                      train_model: bool = True):
+    torch.random.manual_seed(random_seed + cv)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for Prostate Cancer. \n'
+                             f'Settings: random_seed = {random_seed} ; cv = {cv} ; device = {device}.\n'
+          + 100 * '-')
+
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+
+    # Define parameters
+    n_epoch_model = 5
+    log_interval = 100
+    weight_decay = 1e-5
+    corpus_size = 1000
+    test_size = 100
+    n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
+    reg_factor_init = 0.01
+    reg_factor_final = 10.0
+    n_epoch_simplex = 10000
+
+    # Training a model, save it
+
+
+
+    # Load the data
+    X, y = load_seer(random_seed=random_seed + cv)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=random_seed + cv,
+                                                        stratify=y)
+    train_data = ProstateCancerDataset(X_train, y_train)
+    train_loader = DataLoader(train_data, batch_size=50, shuffle=True)
+    test_data = ProstateCancerDataset(X_test, y_test)
+    test_loader = DataLoader(test_data, batch_size=50, shuffle=True)
+    X_cutract, y_cutract = load_cutract(random_seed=random_seed + cv)
+    cutract_data = ProstateCancerDataset(X_cutract, y_cutract)
+    cutract_loader = DataLoader(cutract_data, batch_size=test_size, shuffle=True)
+
+
+
+    print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+
+    if train_model:
+        # Create the model
+        classifier = MortalityPredictor(n_cont=3)
+        classifier.to(device)
+        optimizer = optim.Adam(classifier.parameters(), weight_decay=weight_decay)
+
+        # Train the model
+        print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+        train_losses = []
+        train_counter = []
+        test_losses = []
+
+        def train(epoch):
+            classifier.train()
+            for batch_idx, (data, target) in enumerate(train_loader):
+                data = data.to(device)
+                target = target.type(torch.LongTensor)
+                target = target.to(device)
+                optimizer.zero_grad()
+                output = classifier(data)
+                loss = F.nll_loss(output, target)
+                loss.backward()
+                optimizer.step()
+                if batch_idx % log_interval == 0:
+                    print(f'Train Epoch: {epoch} [{batch_idx * len(data)}/{len(train_loader.dataset)}'
+                          f' ({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}')
+                    train_losses.append(loss.item())
+                    train_counter.append(
+                        (batch_idx * 128) + ((epoch - 1) * len(train_loader.dataset)))
+                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
+                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+
+        def test():
+            classifier.eval()
+            test_loss = 0
+            correct = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data = data.to(device)
+                    target = target.type(torch.LongTensor)
+                    target = target.to(device)
+                    output = classifier(data)
+                    test_loss += F.nll_loss(output, target, reduction='sum').item()
+                    pred = output.data.max(1, keepdim=True)[1]
+                    correct += pred.eq(target.data.view_as(pred)).sum()
+            test_loss /= len(test_loader.dataset)
+            test_losses.append(test_loss)
+            print(f'\nTest set: Avg. loss: {test_loss:.4f}, Accuracy: {correct}/{len(test_loader.dataset)}'
+                  f'({100. * correct / len(test_loader.dataset):.0f}%)\n')
+
+        test()
+        for epoch in range(1, n_epoch_model + 1):
+            train(epoch)
+            test()
+        torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
+        torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+
+    # Load model:
+    classifier = MortalityPredictor(n_cont=3)
+    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.to(device)
+    classifier.eval()
+
+    # Load data for the explainers
+    print(100 * '-' + '\n' + 'Now fitting the explainer. \n' + 100 * '-')
+
+    corpus_loader = DataLoader(train_data, batch_size=corpus_size, shuffle=True)
+    seer_loader = DataLoader(test_data, batch_size=test_size, shuffle=True)
+
+    corpus_examples = enumerate(corpus_loader)
+    seer_examples = enumerate(seer_loader)
+    cutract_examples = enumerate(cutract_loader)
+    _, (corpus_features, corpus_target) = next(corpus_examples)
+    _, (seer_features, seer_targets) = next(seer_examples)
+    _, (cutract_features, cutract_targets) = next(cutract_examples)
+    corpus_features = corpus_features.to(device).detach()
+    seer_features = seer_features.to(device).detach()
+    cutract_features = cutract_features.to(device).detach()
+    test_features = torch.cat([seer_features, cutract_features], dim=0)
+    test_targets = torch.cat([seer_targets, cutract_targets], dim=0)
+    corpus_latent_reps = classifier.latent_representation(corpus_features).detach()
+    corpus_probas = classifier.probabilities(corpus_features).detach()
+    corpus_true_classes = torch.zeros(corpus_probas.shape, device=device)
+    corpus_true_classes[torch.arange(corpus_size), corpus_target.type(torch.LongTensor)] = 1
+    test_latent_reps = classifier.latent_representation(test_features).detach()
+
+    # Save data:
+    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    with open(corpus_data_path, 'wb') as f:
+        print(f'Saving corpus data in {corpus_data_path}.')
+        pkl.dump([corpus_latent_reps, corpus_probas, corpus_true_classes], f)
+    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    with open(test_data_path, 'wb') as f:
+        print(f'Saving test data in {test_data_path}.')
+        pkl.dump([test_latent_reps, test_targets], f)
+
+    # Fit corpus:
+    corpus = Corpus(corpus_examples=corpus_features,
+                    corpus_latent_reps=corpus_latent_reps)
+    weights = corpus.fit(test_examples=test_features,
+                         test_latent_reps=test_latent_reps,
+                         n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
+    explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving representer decomposition in {explainer_path}.')
+        pkl.dump(corpus, f)
+    test_latent_approx = corpus.latent_approx()
+    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx) ** 2).mean(dim=-1))
+    n_inspected = [n for n in range(test_residuals.shape[0])]
+    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1] > 99) for n in n_inspected]
+    sns.set()
+    plt.plot(n_inspected, n_detected)
+    plt.xlabel('Number of inspected examples')
+    plt.ylabel('Number of outliers detected')
+    plt.show()
+
 
 def main(experiment: str = 'approximation_quality', cv: int = 0):
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv)
+    elif experiment == 'outlier_detection':
+        outlier_detection(cv=cv)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
+parser.add_argument('-experiment', type=str, default='outlier_detection', help='Experiment to perform')
 parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
 args = parser.parse_args()
 

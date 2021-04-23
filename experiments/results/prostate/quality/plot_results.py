@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 
-CV = 9
+CV = 19
 n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
 explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 names_dict = {'simplex': 'Simplex', 'nn_uniform': 'KNN Uniform', 'nn_dist': 'KNN Distance'}
@@ -57,6 +57,8 @@ mean_df = results_df.groupby(['explainer', 'n_keep']).aggregate('mean').unstack(
 std_df = results_df.groupby(['explainer', 'n_keep']).aggregate('std').unstack(level=0)
 min_df = results_df.groupby(['explainer', 'n_keep']).aggregate('min').unstack(level=0)
 max_df = results_df.groupby(['explainer', 'n_keep']).aggregate('max').unstack(level=0)
+q1_df = results_df.groupby(['explainer', 'n_keep']).quantile(0.25).unstack(level=0)
+q3_df = results_df.groupby(['explainer', 'n_keep']).quantile(0.75).unstack(level=0)
 
 for m, metric_name in enumerate(metric_names):
     plt.figure(m + 1)
@@ -65,20 +67,24 @@ for m, metric_name in enumerate(metric_names):
         '''
         plt.fill_between(n_keep_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
                          mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)
-        '''
         plt.fill_between(n_keep_list, min_df[metric_name, explainer_name],
-                         max_df[metric_name, explainer_name], alpha=0.2)
+                         max_df[metric_name, explainer_name], alpha=0.2)    
+        plt.fill_between(n_keep_list, q1_df[metric_name, explainer_name],
+                         q3_df[metric_name, explainer_name], alpha=0.2)                                                       
+        '''
+        plt.fill_between(n_keep_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
+                         mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)
 
 plt.figure(1)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2(\hat{\boldsymbol{h}}, \boldsymbol{h})$')
-#plt.ylim(top=1.0)
+plt.ylim(top=1.0)
 plt.legend()
 plt.savefig('r2_latent.pdf', bbox_inches='tight')
 plt.figure(2)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2(\hat{\boldsymbol{y}}, \boldsymbol{y})$')
-#plt.ylim(top=1.0)
+plt.ylim(top=1.0)
 plt.legend()
 plt.savefig('r2_output.pdf', bbox_inches='tight')
 plt.figure(3)
