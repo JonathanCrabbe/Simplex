@@ -407,7 +407,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
                          n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
     explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
     with open(explainer_path, 'wb') as f:
-        print(f'Saving representer decomposition in {explainer_path}.')
+        print(f'Saving simplex decomposition in {explainer_path}.')
         pkl.dump(corpus, f)
     test_latent_approx = corpus.latent_approx()
     test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx) ** 2).mean(dim=-1))
