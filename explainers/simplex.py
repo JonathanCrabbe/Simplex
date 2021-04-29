@@ -65,7 +65,7 @@ class Simplex:
         assert test_id < self.n_test
         weights = self.weights[test_id].cpu().numpy()
         sort_id = np.argsort(weights)[::-1]
-        return [(weights[i], self.corpus_examples[i]) for i in sort_id]
+        return [(weights[i], self.corpus_examples[i], self.jacobian_projections[i]) for i in sort_id]
 
     def plot_hist(self):
         sns.set()
@@ -77,11 +77,10 @@ class Simplex:
         axs[1].set(xlabel='Epoch', ylabel='Regulator')
         plt.show()
 
-    def jacobian_projection(self, model: torch.nn.Module, input_baseline, n_bins=100):
-        assert self.test_latent_reps.shape[0] == 1
+    def jacobian_projection(self, test_id, model: torch.nn.Module, input_baseline, n_bins=100):
         corpus_inputs = self.corpus_examples.clone().requires_grad_()
         input_shift = self.corpus_examples - input_baseline
-        latent_shift = self.test_latent_reps - model.latent_representation(input_baseline)
+        latent_shift = self.test_latent_reps[test_id:test_id+1] - model.latent_representation(input_baseline)
         for n in range(1, n_bins + 1):
             t = n / n_bins
             input = input_baseline + t * (corpus_inputs - input_baseline)
