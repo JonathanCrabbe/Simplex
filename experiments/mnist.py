@@ -8,7 +8,7 @@ import argparse
 import pickle as pkl
 import torch.nn.functional as F
 from models.image_recognition import MnistClassifier
-from explainers.corpus import Corpus
+from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
@@ -135,8 +135,8 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
 
     # Fit corpus:
     reg_factor_scheduler = ExponentialScheduler(reg_factor_init, reg_factor_final, n_epoch)
-    corpus = Corpus(corpus_examples=corpus_data,
-                    corpus_latent_reps=corpus_latent_reps)
+    corpus = Simplex(corpus_examples=corpus_data,
+                     corpus_latent_reps=corpus_latent_reps)
     weights = corpus.fit(test_examples=test_data,
                          test_latent_reps=test_latent_reps,
                          n_epoch=n_epoch, learning_rate=learning_rate, momentum=momentum,
@@ -290,8 +290,8 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
     # Fit corpus:
     reg_factor_scheduler = ExponentialScheduler(1, 1, n_epoch=1)
-    corpus = Corpus(corpus_examples=corpus_data,
-                    corpus_latent_reps=corpus_latent_reps)
+    corpus = Simplex(corpus_examples=corpus_data,
+                     corpus_latent_reps=corpus_latent_reps)
     weights = corpus.fit(test_examples=test_data,
                          test_latent_reps=test_latent_reps,
                          n_epoch=10000, learning_rate=100.0, momentum=0.5,

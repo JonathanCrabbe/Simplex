@@ -6,7 +6,7 @@ import pickle as pkl
 import torch.nn.functional as F
 from visualization.images import plot_mnist
 from models.image_recognition import MnistClassifier
-from explainers.corpus import Corpus
+from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from utils.schedulers import ExponentialScheduler
 
@@ -138,8 +138,8 @@ def fit_explainers(n_epoch=10000, corpus_size=1000, test_size=100, learning_rate
     # Fit corpus:
 
     reg_factor_scheduler = ExponentialScheduler(reg_factor_init, reg_factor_final, n_epoch)
-    corpus = Corpus(corpus_examples=corpus_data.detach(),
-                    corpus_latent_reps=(classifier.latent_representation(corpus_data)).detach())
+    corpus = Simplex(corpus_examples=corpus_data.detach(),
+                     corpus_latent_reps=(classifier.latent_representation(corpus_data)).detach())
     weights = corpus.fit(test_examples=example_data.detach(),
                          test_latent_reps=classifier.latent_representation(example_data).detach(),
                          n_epoch=n_epoch, learning_rate=learning_rate, momentum=momentum,

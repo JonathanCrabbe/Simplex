@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from models.tabular_data import MortalityPredictor
 from sklearn.model_selection import train_test_split
-from explainers.corpus import Corpus
+from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
@@ -202,8 +202,8 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
         explainers = []
         # Fit corpus:
         reg_factor_scheduler = ExponentialScheduler(reg_factor_init, reg_factor_final, n_epoch_simplex)
-        corpus = Corpus(corpus_examples=corpus_data,
-                        corpus_latent_reps=corpus_latent_reps)
+        corpus = Simplex(corpus_examples=corpus_data,
+                         corpus_latent_reps=corpus_latent_reps)
         weights = corpus.fit(test_examples=test_data,
                              test_latent_reps=test_latent_reps,
                              n_epoch=n_epoch_simplex, learning_rate=learning_rate_simplex, momentum=momentum_simplex,
@@ -400,8 +400,8 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
         pkl.dump([test_latent_reps, test_targets], f)
 
     # Fit corpus:
-    corpus = Corpus(corpus_examples=corpus_features,
-                    corpus_latent_reps=corpus_latent_reps)
+    corpus = Simplex(corpus_examples=corpus_features,
+                     corpus_latent_reps=corpus_latent_reps)
     weights = corpus.fit(test_examples=test_features,
                          test_latent_reps=test_latent_reps,
                          n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])

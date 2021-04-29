@@ -5,7 +5,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-class Corpus:
+class Simplex:
     def __init__(self, corpus_examples: torch.Tensor, corpus_latent_reps: torch.Tensor):
         self.corpus_examples = corpus_examples
         self.corpus_latent_reps = corpus_latent_reps
@@ -16,13 +16,14 @@ class Corpus:
         self.hist = None
         self.test_examples = None
         self.test_latent_reps = None
+        self.jacobian_projections = None
 
     def fit(self, test_examples: torch.Tensor, test_latent_reps: torch.Tensor,
             learning_rate=1.0, momentum=0.5, n_epoch=10000, reg_factor=1.0, n_keep: int = 5,
             reg_factor_scheduler=None):
         n_test = test_latent_reps.shape[0]
         preweights = torch.zeros((n_test, self.corpus_size), device=test_latent_reps.device, requires_grad=True)
-        #optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum)
+        # optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum)
         optimizer = torch.optim.Adam([preweights])
         hist = np.zeros((0, 2))
         for epoch in range(n_epoch):
@@ -60,10 +61,9 @@ class Corpus:
         approx_reps = self.weights @ self.corpus_latent_reps
         return approx_reps
 
-
     def decompose(self, test_id):
         assert test_id < self.n_test
-        weights = self.weights[test_id]
+        weights = self.weights[test_id].cpu().numpy()
         sort_id = np.argsort(weights)[::-1]
         return [(weights[i], self.corpus_examples[i]) for i in sort_id]
 
@@ -77,9 +77,18 @@ class Corpus:
         axs[1].set(xlabel='Epoch', ylabel='Regulator')
         plt.show()
 
-
-
-
+    def jacobian_projection(self, model: torch.nn.Module, input_baseline, n_bins=100):
+        assert self.test_latent_reps.shape[0] == 1
+        corpus_inputs = self.corpus_examples.clone().requires_grad_()
+        input_shift = self.corpus_examples - input_baseline
+        latent_shift = self.test_latent_reps - model.latent_representation(input_baseline)
+        for n in range(1, n_bins + 1):
+            t = n / n_bins
+            input = input_baseline + t * (corpus_inputs - input_baseline)
+            latent_reps = model.latent_representation(input)
+            latent_reps.backward(gradient=latent_shift)
+        self.jacobian_projections = input_shift * corpus_inputs.grad / n_bins
+        return self.jacobian_projections
 
 '''
 
