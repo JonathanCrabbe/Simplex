@@ -23,6 +23,7 @@ def plot_prostate_patient(input: np.ndarray, title: str, saliency=None):
         rowLabels=rowLabels,
         colLabels=colLabels,
         loc='upper left')
+    table.auto_set_column_width(0)
     ax.set_title(title)
     fig.tight_layout()
     if saliency is not None:
