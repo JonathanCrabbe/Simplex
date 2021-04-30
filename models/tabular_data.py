@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class MortalityPredictor(nn.Module):
-    def __init__(self, n_cont):
+    def __init__(self, n_cont: int = 3):
         super().__init__()
         self.n_cont = n_cont
         self.lin1 = nn.Linear(26, 200)
@@ -27,10 +27,10 @@ class MortalityPredictor(nn.Module):
         x = torch.cat([x_cont, x_disc], 1)
         x = F.relu(self.lin1(x))
         x = self.drops(x)
-        #x = self.bn2(x)
+        # x = self.bn2(x)
         x = F.relu(self.lin2(x))
         x = self.drops(x)
-        #x = self.bn3(x)
+        # x = self.bn3(x)
         return x
 
     def probabilities(self, x):
