@@ -206,6 +206,7 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']
 
+
     # Create saving directory if inexistent
     if not os.path.exists(save_path):
         print(f'Creating the saving directory {save_path}')
@@ -248,9 +249,13 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
 
 
 # Outlier Detection experiment
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/'):
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/',
+                      train: bool = True):
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    n_epoch_simplex = 10000
+    K = 4
+
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
@@ -261,9 +266,9 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
         os.makedirs(save_path)
 
     # Training a model, save it
-
-    print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-    train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
+    if train:
+        print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+        train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
 
     # Load the model
     classifier = MnistClassifier()
@@ -276,39 +281,60 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     mnist_test_loader = load_mnist(batch_size=100, train=False)
     emnist_test_loader = load_emnist(batch_size=100, train=True)
     corpus_examples = enumerate(corpus_loader)
-    batch_id_corpus, (corpus_data, corpus_target) = next(corpus_examples)
-    corpus_data = corpus_data.to(device).detach()
+    batch_id_corpus, (corpus_features, corpus_target) = next(corpus_examples)
+    corpus_features = corpus_features.to(device).detach()
     mnist_test_examples = enumerate(mnist_test_loader)
-    batch_id_test_mnist, (mnist_test_data, mnist_test_target) = next(mnist_test_examples)
-    mnist_test_data = mnist_test_data.to(device).detach()
+    batch_id_test_mnist, (mnist_test_features, mnist_test_target) = next(mnist_test_examples)
+    mnist_test_features = mnist_test_features.to(device).detach()
     emnist_test_examples = enumerate(emnist_test_loader)
-    batch_id_test_emnist, (emnist_test_data, emnist_test_target) = next(emnist_test_examples)
-    emnist_test_data = emnist_test_data.to(device).detach()
-    test_data = torch.cat([mnist_test_data, emnist_test_data], dim=0)
-    corpus_latent_reps = classifier.latent_representation(corpus_data).detach()
-    test_latent_reps = classifier.latent_representation(test_data).detach()
+    batch_id_test_emnist, (emnist_test_features, emnist_test_target) = next(emnist_test_examples)
+    emnist_test_features = emnist_test_features.to(device).detach()
+    test_features = torch.cat([mnist_test_features, emnist_test_features], dim=0)
+    corpus_latent_reps = classifier.latent_representation(corpus_features).detach()
+    test_latent_reps = classifier.latent_representation(test_features).detach()
 
     # Fit corpus:
-    reg_factor_scheduler = ExponentialScheduler(1, 1, n_epoch=1)
-    corpus = Simplex(corpus_examples=corpus_data,
-                     corpus_latent_reps=corpus_latent_reps)
-    weights = corpus.fit(test_examples=test_data,
-                         test_latent_reps=test_latent_reps,
-                         n_epoch=10000, learning_rate=100.0, momentum=0.5,
-                         reg_factor=0, n_keep=corpus_data.shape[0],
-                         reg_factor_scheduler=reg_factor_scheduler)
+    simplex = Simplex(corpus_examples=corpus_features,
+                      corpus_latent_reps=corpus_latent_reps)
+    weights = simplex.fit(test_examples=test_features,
+                          test_latent_reps=test_latent_reps,
+                          n_epoch=n_epoch_simplex, learning_rate=100.0, momentum=0.5,
+                          reg_factor=0, n_keep=corpus_features.shape[0])
     explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
     with open(explainer_path, 'wb') as f:
-        print(f'Saving representer decomposition in {explainer_path}.')
-        pkl.dump(corpus, f)
-    test_latent_approx = corpus.latent_approx()
-    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx) ** 2).mean(dim=-1))
-    n_inspected = [n for n in range(test_data.shape[0])]
-    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1] > 99) for n in n_inspected]
+        print(f'Saving simplex decomposition in {explainer_path}.')
+        pkl.dump(simplex, f)
+    nn_uniform = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps)
+    nn_uniform.fit(test_features, test_latent_reps, n_keep=K)
+    nn_dist = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps,
+                              weights_type='distance')
+    nn_dist.fit(test_features, test_latent_reps, n_keep=K)
+    explainer_path = os.path.join(save_path, f'nn_dist_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving nn_dist decomposition in {explainer_path}.')
+        pkl.dump(nn_dist, f)
+    explainer_path = os.path.join(save_path, f'nn_uniform_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving nn_uniform decomposition in {explainer_path}.')
+        pkl.dump(nn_uniform, f)
+
+    simplex_latent_approx = simplex.latent_approx()
+    simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
+    n_inspected = [n for n in range(simplex_residuals.shape[0])]
+    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_dist_latent_approx = nn_dist.latent_approx()
+    nn_dist_residuals = torch.sqrt(((test_latent_reps - nn_dist_latent_approx) ** 2).mean(dim=-1))
+    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_uniform_latent_approx = nn_uniform.latent_approx()
+    nn_uniform_residuals = torch.sqrt(((test_latent_reps - nn_uniform_latent_approx) ** 2).mean(dim=-1))
+    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99) for n in n_inspected]
     sns.set()
-    plt.plot(n_inspected, n_detected)
+    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
+    plt.plot(n_inspected, nn_dist_n_detected, label=f'{K}NN Distance')
+    plt.plot(n_inspected, nn_uniform_n_detected, label=f'{K}NN Uniform')
     plt.xlabel('Number of inspected examples')
     plt.ylabel('Number of outliers detected')
+    plt.legend()
     plt.show()
 
 
@@ -320,7 +346,7 @@ def main(experiment: str, cv: int):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
+parser.add_argument('-experiment', type=str, default='outlier', help='Experiment to perform')
 parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
 args = parser.parse_args()
 

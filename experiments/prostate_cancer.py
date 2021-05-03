@@ -271,7 +271,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
-
     # Define parameters
     n_epoch_model = 5
     log_interval = 100
@@ -285,8 +284,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
     # Training a model, save it
 
-
-
     # Load the data
     X, y = load_seer(random_seed=random_seed + cv)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=random_seed + cv,
@@ -298,7 +295,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     X_cutract, y_cutract = load_cutract(random_seed=random_seed + cv)
     cutract_data = ProstateCancerDataset(X_cutract, y_cutract)
     cutract_loader = DataLoader(cutract_data, batch_size=test_size, shuffle=True)
-
 
     if train_model:
         # Create the model
@@ -398,10 +394,10 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
     # Fit explainers:
     simplex = Simplex(corpus_examples=corpus_features,
-                     corpus_latent_reps=corpus_latent_reps)
+                      corpus_latent_reps=corpus_latent_reps)
     weights = simplex.fit(test_examples=test_features,
-                         test_latent_reps=test_latent_reps,
-                         n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
+                          test_latent_reps=test_latent_reps,
+                          n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
     explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
     with open(explainer_path, 'wb') as f:
         print(f'Saving simplex decomposition in {explainer_path}.')
@@ -439,7 +435,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     plt.ylabel('Number of outliers detected')
     plt.legend()
     plt.show()
-
 
 
 def main(experiment: str = 'approximation_quality', cv: int = 0):
