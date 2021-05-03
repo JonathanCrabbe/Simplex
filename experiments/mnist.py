@@ -254,7 +254,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     n_epoch_simplex = 10000
-    K = 4
+    K = 5
 
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
