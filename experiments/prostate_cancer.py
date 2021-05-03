@@ -276,7 +276,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     n_epoch_model = 5
     log_interval = 100
     weight_decay = 1e-5
-    corpus_size = 1000
+    corpus_size = 100
     test_size = 100
     n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
     reg_factor_init = 0.01
@@ -299,9 +299,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     cutract_data = ProstateCancerDataset(X_cutract, y_cutract)
     cutract_loader = DataLoader(cutract_data, batch_size=test_size, shuffle=True)
 
-
-
-    print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
 
     if train_model:
         # Create the model
@@ -399,25 +396,42 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
         print(f'Saving test data in {test_data_path}.')
         pkl.dump([test_latent_reps, test_targets], f)
 
-    # Fit corpus:
-    corpus = Simplex(corpus_examples=corpus_features,
+    # Fit explainers:
+    simplex = Simplex(corpus_examples=corpus_features,
                      corpus_latent_reps=corpus_latent_reps)
-    weights = corpus.fit(test_examples=test_features,
+    weights = simplex.fit(test_examples=test_features,
                          test_latent_reps=test_latent_reps,
                          n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
     explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
     with open(explainer_path, 'wb') as f:
         print(f'Saving simplex decomposition in {explainer_path}.')
-        pkl.dump(corpus, f)
-    test_latent_approx = corpus.latent_approx()
-    test_residuals = torch.sqrt(((test_latent_reps - test_latent_approx) ** 2).mean(dim=-1))
-    n_inspected = [n for n in range(test_residuals.shape[0])]
-    n_detected = [torch.count_nonzero(torch.topk(test_residuals, k=n)[1] > 99) for n in n_inspected]
+        pkl.dump(simplex, f)
+
+    nn_uniform = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps)
+    nn_uniform.fit(test_features, test_latent_reps, n_keep=7)
+    nn_dist = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps,
+                              weights_type='distance')
+    nn_dist.fit(test_features, test_latent_reps, n_keep=7)
+
+    simplex_latent_approx = simplex.latent_approx()
+    simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
+    n_inspected = [n for n in range(simplex_residuals.shape[0])]
+    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_dist_latent_approx = nn_dist.latent_approx()
+    nn_dist_residuals = torch.sqrt(((test_latent_reps - nn_dist_latent_approx) ** 2).mean(dim=-1))
+    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_uniform_latent_approx = nn_uniform.latent_approx()
+    nn_uniform_residuals = torch.sqrt(((test_latent_reps - nn_uniform_latent_approx) ** 2).mean(dim=-1))
+    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99) for n in n_inspected]
     sns.set()
-    plt.plot(n_inspected, n_detected)
+    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
+    plt.plot(n_inspected, nn_dist_n_detected, label='7NN Distance')
+    plt.plot(n_inspected, nn_uniform_n_detected, label='7NN Uniform')
     plt.xlabel('Number of inspected examples')
     plt.ylabel('Number of outliers detected')
+    plt.legend()
     plt.show()
+
 
 
 def main(experiment: str = 'approximation_quality', cv: int = 0):
@@ -429,7 +443,7 @@ def main(experiment: str = 'approximation_quality', cv: int = 0):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-experiment', type=str, default='outlier_detection', help='Experiment to perform')
-parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
+parser.add_argument('-cv', type=int, default=10, help='Cross validation parameter')
 args = parser.parse_args()
 
 if __name__ == '__main__':
