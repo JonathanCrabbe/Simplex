@@ -30,7 +30,8 @@ def plot_prostate_patient(input: np.ndarray, title: str, saliency=None):
         saliency_reduced = np.concatenate((saliency[:3], saliency[3:7].sum(keepdims=True),
                                            saliency[7:12].sum(keepdims=True), saliency[12:16].sum(keepdims=True),
                                            saliency[12:21].sum(keepdims=True), saliency[21:].sum(keepdims=True)))
-        saliency_reduced = (saliency_reduced + 1) / 2
+        saliency_reduced /= np.abs(saliency_reduced).max()
+        saliency_reduced = 0.5 + 0.5*saliency_reduced
         for i in range(len(rowLabels)):
             color = cmap(saliency_reduced[i])
             table.get_celld()[(i + 1, 0)].set_facecolor(color)

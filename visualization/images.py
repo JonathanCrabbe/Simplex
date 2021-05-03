@@ -8,3 +8,4 @@ def plot_mnist(data, title=''):
     plt.xticks([])
     plt.yticks([])
     plt.show()
+    return fig

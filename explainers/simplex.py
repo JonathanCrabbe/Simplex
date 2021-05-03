@@ -82,15 +82,16 @@ class Simplex:
         corpus_inputs = self.corpus_examples.clone().requires_grad_()
         input_shift = self.corpus_examples - input_baseline
         latent_shift = self.test_latent_reps[test_id:test_id+1] - model.latent_representation(input_baseline)
+        latent_shift_sqrdnorm = torch.sum(latent_shift**2, dim=-1, keepdim=True)
         input_grad = torch.zeros(corpus_inputs.shape, device=corpus_inputs.device)
         for n in range(1, n_bins + 1):
             t = n / n_bins
             input = input_baseline + t * (corpus_inputs - input_baseline)
             latent_reps = model.latent_representation(input)
-            latent_reps.backward(gradient=latent_shift)
+            latent_reps.backward(gradient=latent_shift/latent_shift_sqrdnorm)
             input_grad += corpus_inputs.grad
             corpus_inputs.grad.data.zero_()
-        self.jacobian_projections = input_shift * input_grad / n_bins
+        self.jacobian_projections = input_shift * input_grad / (n_bins)
         return self.jacobian_projections
 
 '''

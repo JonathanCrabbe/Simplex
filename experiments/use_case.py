@@ -29,7 +29,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
     n_epoch = 10
     log_interval = 100
     n_keep = 3
-    test_id = 69
+    test_id = 22
 
     print(20 * '-' + f'Welcome in the use case for MNIST' + 20 * '-')
 
@@ -109,27 +109,29 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
     _, (test_inputs, test_target) = next(test_examples)
     test_inputs = test_inputs[test_id:test_id+1].to(device).detach()
 
+
     simplex = Simplex(corpus_inputs, classifier.latent_representation(corpus_inputs).detach())
     scheduler = ExponentialScheduler(x_init=0.1, x_final=1000, n_epoch=20000)
     weights = simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
                           n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
 
-    input_baseline = torch.zeros(corpus_inputs.shape, device=device)
+    input_baseline = -0.4242*torch.ones(corpus_inputs.shape, device=device)
     jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
                                                        n_bins=500)
     decomposition = simplex.decompose(0)
 
     output = classifier(test_inputs)
     title = f'Prediction: {output.data.max(1, keepdim=True)[1][0].item()}'
-    plot_mnist(simplex.test_examples[0][0].cpu().numpy(), title)
+    fig = plot_mnist(simplex.test_examples[0][0].cpu().numpy(), title)
+    #plt.savefig(os.path.join(save_path, f'test_image_id{test_id}'))
     for i in range(n_keep):
         image = decomposition[i][1].cpu().numpy().transpose((1, 2, 0))
         saliency = decomposition[i][2].cpu().numpy().transpose((1, 2, 0))
         title = f'Weight: {decomposition[i][0]:.2g}'
-        #plot_mnist(data, title)
-        #plot_mnist(saliency, title)
-        visualize_image_attr(saliency, image, method='blended_heat_map', sign='all', title=title)
+        figure, axis = visualize_image_attr(saliency, image, method='blended_heat_map',
+                                            sign='all', title=title, use_pyplot=True)
         plt.show()
+        #plt.savefig(os.path.join(save_path, f'corpus_image{i + 1}_id{test_id}'))
 
 
 def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True):
@@ -243,14 +245,14 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     output = classifier(test_inputs)
     title = f'Predicted Mortality: {output.data.max(1, keepdim=True)[1][0].item()}'
     plot_prostate_patient(test_inputs[0].cpu().numpy(), title)
-    plt.savefig(os.path.join(save_path, 'test_patient'))
     plt.show()
+    plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
     for i in range(n_keep):
         input = decomposition[i][1].cpu().numpy()
         saliency = decomposition[i][2].cpu().numpy()
         title = f'Weight: {decomposition[i][0]:.2g}'
         plot_prostate_patient(input, title, saliency)
-        plt.savefig(os.path.join(save_path, f'corpus_patient{i+1}'))
+        plt.savefig(os.path.join(save_path, f'corpus_patient{i+1}_id{test_id}'))
         plt.show()
 
 
