@@ -412,6 +412,14 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     nn_dist = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps,
                               weights_type='distance')
     nn_dist.fit(test_features, test_latent_reps, n_keep=7)
+    explainer_path = os.path.join(save_path, f'nn_dist_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving nn_dist decomposition in {explainer_path}.')
+        pkl.dump(nn_dist, f)
+    explainer_path = os.path.join(save_path, f'nn_uniform_cv{cv}.pkl')
+    with open(explainer_path, 'wb') as f:
+        print(f'Saving nn_uniform decomposition in {explainer_path}.')
+        pkl.dump(nn_uniform, f)
 
     simplex_latent_approx = simplex.latent_approx()
     simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
