@@ -10,7 +10,7 @@ def plot_prostate_patient(input: np.ndarray, title: str, saliency=None):
     fig, ax = plt.subplots()
     ax.set_axis_off()
     age, psa, comorbidities = input[:3]
-    treatments = treatment_list[input[3:7] != 0]
+    treatments = treatment_list[np.nonzero(input[3:7])]
     grade = np.argmax(input[7:12]) + 1
     stage = np.argmax(input[12:16]) + 1
     gleason1 = np.argmax(input[12:21]) + 1
@@ -30,7 +30,7 @@ def plot_prostate_patient(input: np.ndarray, title: str, saliency=None):
         saliency_reduced = np.concatenate((saliency[:3], saliency[3:7].sum(keepdims=True),
                                            saliency[7:12].sum(keepdims=True), saliency[12:16].sum(keepdims=True),
                                            saliency[12:21].sum(keepdims=True), saliency[21:].sum(keepdims=True)))
-        saliency_reduced /= np.abs(saliency_reduced).max()
+        saliency_reduced /= 0.25
         saliency_reduced = 0.5 + 0.5*saliency_reduced
         for i in range(len(rowLabels)):
             color = cmap(saliency_reduced[i])

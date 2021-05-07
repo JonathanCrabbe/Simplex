@@ -62,11 +62,14 @@ class Simplex:
         approx_reps = self.weights @ self.corpus_latent_reps
         return approx_reps
 
-    def decompose(self, test_id):
+    def decompose(self, test_id, return_id = False):
         assert test_id < self.n_test
         weights = self.weights[test_id].cpu().numpy()
         sort_id = np.argsort(weights)[::-1]
-        return [(weights[i], self.corpus_examples[i], self.jacobian_projections[i]) for i in sort_id]
+        if return_id:
+            return [(weights[i], self.corpus_examples[i], self.jacobian_projections[i]) for i in sort_id], sort_id
+        else:
+            return [(weights[i], self.corpus_examples[i], self.jacobian_projections[i]) for i in sort_id]
 
     def plot_hist(self):
         sns.set()
@@ -81,7 +84,8 @@ class Simplex:
     def jacobian_projection(self, test_id, model: torch.nn.Module, input_baseline, n_bins=100):
         corpus_inputs = self.corpus_examples.clone().requires_grad_()
         input_shift = self.corpus_examples - input_baseline
-        latent_shift = self.test_latent_reps[test_id:test_id+1] - model.latent_representation(input_baseline)
+        #latent_shift = self.test_latent_reps[test_id:test_id+1] - model.latent_representation(input_baseline)
+        latent_shift = self.latent_approx()[test_id:test_id + 1] - model.latent_representation(input_baseline)
         latent_shift_sqrdnorm = torch.sum(latent_shift**2, dim=-1, keepdim=True)
         input_grad = torch.zeros(corpus_inputs.shape, device=corpus_inputs.device)
         for n in range(1, n_bins + 1):
