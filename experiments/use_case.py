@@ -366,7 +366,7 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
 
     # Extract a mislabeled example that we will interpret with the two corpus
     mislabeled_examples = np.nonzero(test_uk_predictions != test_uk_target)[0]
-    selected_id = mislabeled_examples[31]  # 31 42 14
+    selected_id = mislabeled_examples[66]  # Type 1: 66 12     ; Type 2: 31 42 14
     selected_input = test_uk_inputs[selected_id:selected_id+1]
     selected_latent_rep = classifier.latent_representation(selected_input).detach()
     scheduler = ExponentialScheduler(x_init=0.1, x_final=100, n_epoch=20000)
@@ -390,7 +390,7 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
     decomposition_uk, corpus_ids_uk = simplex_uk.decompose(0, return_id=True)
 
     title = f'Predicted Mortality: {test_uk_predictions[selected_id]} ; True Mortality: {test_uk_target[selected_id]}'
-    plot_prostate_patient(test_uk_inputs[0].cpu().numpy(), title)
+    plot_prostate_patient(selected_input[0].cpu().numpy(), title)
     plt.show()
     #plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
     for i in range(n_keep):
