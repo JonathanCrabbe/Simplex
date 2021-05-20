@@ -11,6 +11,7 @@ CV = 19
 n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
 explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 names_dict = {'simplex': 'SimplEx', 'nn_uniform': 'KNN Uniform', 'nn_dist': 'KNN Distance'}
+line_styles = {'simplex': '-', 'nn_uniform': '--', 'nn_dist': ':'}
 metric_names = ['r2_latent', 'r2_output', 'residual_latent', 'residual_output']
 results_df = pd.DataFrame(columns=['explainer', 'n_keep', 'cv', 'r2_latent', 'r2_output',
                                    'residual_latent', 'residual_output'])
@@ -52,7 +53,8 @@ for cv in range(CV + 1):
     representer_metrics[0, cv] = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
     representer_metrics[1, cv] = torch.sqrt(((output_true - output_approx) ** 2).mean() / (output_true ** 2).mean()).item()
 
-sns.set()
+sns.set(font_scale=1.5)
+sns.set_style("white")
 mean_df = results_df.groupby(['explainer', 'n_keep']).aggregate('mean').unstack(level=0)
 std_df = results_df.groupby(['explainer', 'n_keep']).aggregate('std').unstack(level=0)
 min_df = results_df.groupby(['explainer', 'n_keep']).aggregate('min').unstack(level=0)
@@ -63,7 +65,8 @@ q3_df = results_df.groupby(['explainer', 'n_keep']).quantile(0.75).unstack(level
 for m, metric_name in enumerate(metric_names):
     plt.figure(m + 1)
     for explainer_name in explainer_names:
-        plt.plot(n_keep_list, mean_df[metric_name, explainer_name], label=names_dict[explainer_name])
+        plt.plot(n_keep_list, mean_df[metric_name, explainer_name], line_styles[explainer_name],
+                 label=names_dict[explainer_name])
         '''
         plt.fill_between(n_keep_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
                          mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)

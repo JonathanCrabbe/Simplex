@@ -389,23 +389,23 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
                                                              input_baseline=input_baseline_uk, n_bins=500)
     decomposition_uk, corpus_ids_uk = simplex_uk.decompose(0, return_id=True)
 
-    title = f'Predicted Mortality: {test_uk_predictions[selected_id]} ; True Mortality: {test_uk_target[selected_id]}'
+    title = f'Predicted Mortality: {test_uk_predictions[selected_id]} ; \n True Mortality: {test_uk_target[selected_id]}'
     plot_prostate_patient(selected_input[0].cpu().numpy(), title)
     plt.show()
     #plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
     for i in range(n_keep):
         input_usa = decomposition_usa[i][1].cpu().numpy()
         saliency_usa = decomposition_usa[i][2].cpu().numpy()
-        title = f'USA Patient ; Weight: {decomposition_usa[i][0]:.2g} ; ' \
-                f'Predicted Mortality: {corpus_usa_predictions[corpus_ids_usa[i]]} ;' \
+        title = f'USA Patient ; Weight: {decomposition_usa[i][0]:.2g} ; \n ' \
+                f'Predicted Mortality: {corpus_usa_predictions[corpus_ids_usa[i]]} ; \n' \
                 f'True Mortality: {corpus_usa_target[corpus_ids_usa[i]]}'
         plot_prostate_patient(input_usa, title, saliency_usa)
         #plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
         plt.show()
         input_uk = decomposition_uk[i][1].cpu().numpy()
         saliency_uk = decomposition_uk[i][2].cpu().numpy()
-        title = f'UK Patient ; Weight: {decomposition_uk[i][0]:.2g} ; ' \
-                f'Predicted Mortality: {corpus_uk_predictions[corpus_ids_uk[i]]}  ;' \
+        title = f'UK Patient ; Weight: {decomposition_uk[i][0]:.2g} ; \n ' \
+                f'Predicted Mortality: {corpus_uk_predictions[corpus_ids_uk[i]]}  ; \n' \
                 f'True Mortality: {corpus_uk_target[corpus_ids_uk[i]]}'
         plot_prostate_patient(input_uk, title, saliency_uk)
         # plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
