@@ -119,3 +119,4 @@ dmypy.json
 # Simplex
 experiments/results/*
 experiments/data/*
+experiments/time_series_toy.py
