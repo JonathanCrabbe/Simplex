@@ -12,20 +12,29 @@ class TimeSeriesForecaster(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.batch_size = batch_size
-
-        self.rnn = nn.RNN(input_size=self.input_dim, hidden_size=self.hidden_dim,
-                          batch_first=True, num_layers=self.num_layers, nonlinearity='relu')
+        self.lstm = nn.LSTM(input_size=self.input_dim, hidden_size=self.hidden_dim,
+                            batch_first=True, num_layers=self.num_layers)
         self.lin = nn.Linear(hidden_dim, output_dim)
         self.hidden = self.init_hidden(batch_size)
-        for name, param in self.rnn.named_parameters():
+
+        for name, param in self.lstm.named_parameters():
             if 'bias' in name:
                 nn.init.constant_(param, 0.0)
             elif 'weight' in name:
                 nn.init.xavier_normal_(param)
+
         '''
+         self.rnn = nn.RNN(input_size=self.input_dim, hidden_size=self.hidden_dim,
+                          batch_first=True, num_layers=self.num_layers)
         self.lstm = nn.LSTM(input_size=self.input_dim, hidden_size=self.hidden_dim,
                             batch_first=True, num_layers=self.num_layers)
         for name, param in self.lstm.named_parameters():
+            if 'bias' in name:
+                nn.init.constant_(param, 0.0)
+            elif 'weight' in name:
+                nn.init.xavier_normal_(param)
+                
+                        for name, param in self.lstm.named_parameters():
             if 'bias' in name:
                 nn.init.constant_(param, 0.0)
             elif 'weight' in name:
@@ -38,7 +47,7 @@ class TimeSeriesForecaster(nn.Module):
         return h0, c0
 
     def forward(self, x):
-        x, self.hidden = self.rnn(x)
+        x, self.hidden = self.lstm(x)
         x = self.lin(x)
         return x
 
@@ -48,10 +57,4 @@ class TimeSeriesForecaster(nn.Module):
 
     def latent_to_output(self, x):
         x = self.lin(x)
-        return x
-
-    def seq2seq(self, x):
-        x, _ = self.lstm(x)
-        x = self.lin(x)
-        print(x.shape)
         return x
