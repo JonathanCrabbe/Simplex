@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import os
 import pickle as pkl
+import argparse
 import matplotlib.pyplot as plt
 
 
@@ -200,7 +201,17 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
 
 
 
+def main(experiment: str = 'precision', cv: int = 0):
+    if experiment == 'precision':
+        ar_precision(cv=cv)
+    elif experiment == 'outlier_detection':
+        pass
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-experiment', type=str, default='precision', help='Experiment to perform')
+parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
+args = parser.parse_args()
 
-ar_precision(train=False)
+if __name__ == '__main__':
+    main(args.experiment, args.cv)
