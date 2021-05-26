@@ -23,22 +23,22 @@ class Simplex:
             reg_factor_scheduler=None):
         n_test = test_latent_reps.shape[0]
         preweights = torch.zeros((n_test, self.corpus_size), device=test_latent_reps.device, requires_grad=True)
-        # optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum)
-        optimizer = torch.optim.Adam([preweights])
+        # optimizer = torch.optim.SGD([preweights], lr=learning_rate, momentum=momentum) this is for mnist
+        optimizer = torch.optim.Adam([preweights]) # default lr for prostate
         hist = np.zeros((0, 2))
         for epoch in range(n_epoch):
             optimizer.zero_grad()
             weights = F.softmax(preweights, dim=-1)
             corpus_latent_reps = torch.einsum('ij,jk->ik', weights, self.corpus_latent_reps)
-            error = ((corpus_latent_reps - test_latent_reps) ** 2).mean()
+            error = ((corpus_latent_reps - test_latent_reps) ** 2).sum()#.mean()
             weights_sorted = torch.sort(weights)[0]
-            regulator = (weights_sorted[:, : (self.corpus_size - n_keep)]).mean()
+            regulator = (weights_sorted[:, : (self.corpus_size - n_keep)]).sum()#.mean()
             loss = error + reg_factor * regulator
             loss.backward()
             optimizer.step()
-            if epoch % (n_epoch / 5) == 0:
-                print(f'Weight Fitting Epoch: {epoch}/{n_epoch} ; Error: {error.item():.3g} ;'
-                      f' Regulator: {regulator.item():.3g}')
+            if (epoch+1) % (n_epoch / 5) == 0:
+                print(f'Weight Fitting Epoch: {epoch+1}/{n_epoch} ; Error: {error.item():.3g} ;'
+                      f' Regulator: {regulator.item():.3g} ; Reg Factor: {reg_factor:.3g}')
             if reg_factor_scheduler:
                 reg_factor = reg_factor_scheduler.step(reg_factor)
             hist = np.concatenate((hist,
