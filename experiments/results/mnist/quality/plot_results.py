@@ -36,9 +36,8 @@ for cv in range(CV + 1):
             output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
             latent_r2_score = sklearn.metrics.r2_score(latent_rep_true.cpu().numpy(), latent_rep_approx.cpu().numpy())
             output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
-            residual_latent = torch.sqrt(
-                ((latent_rep_true - latent_rep_approx) ** 2).mean() / (latent_rep_true ** 2).mean()).item()
-            residual_output = torch.sqrt(((output_true - output_approx) ** 2).mean() / (output_true ** 2).mean()).item()
+            residual_latent = torch.sqrt(((latent_rep_true - latent_rep_approx) ** 2).mean()).item()
+            residual_output = torch.sqrt(((output_true - output_approx) ** 2).mean()).item()
             results_df = results_df.append({'explainer': explainer_name, 'n_keep': n_keep, 'cv': cv,
                                             'r2_latent': latent_r2_score, 'r2_output': output_r2_score,
                                             'residual_latent': residual_latent, 'residual_output': residual_output},
@@ -76,12 +75,12 @@ plt.legend()
 plt.savefig('r2_output.pdf', bbox_inches='tight')
 plt.figure(3)
 plt.xlabel(r'$K$')
-plt.ylabel(r'$\| \hat{\boldsymbol{h}} - \boldsymbol{h} \| / \| \boldsymbol{h} \| $')
+plt.ylabel(r'$\| \hat{\boldsymbol{h}} - \boldsymbol{h} \|  $')
 plt.legend()
 plt.savefig('residual_latent.pdf', bbox_inches='tight')
 plt.figure(4)
 plt.xlabel(r'$K$')
-plt.ylabel(r'$\| \hat{\boldsymbol{y}} - \boldsymbol{y} \| / \| \boldsymbol{y} \| $')
+plt.ylabel(r'$\| \hat{\boldsymbol{y}} - \boldsymbol{y} \|  $')
 plt.legend()
 plt.savefig('residual_output.pdf', bbox_inches='tight')
 
