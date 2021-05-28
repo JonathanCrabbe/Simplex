@@ -10,6 +10,7 @@ from sklearn.metrics import r2_score
 import numpy as np
 import torch
 import os
+import seaborn as sns
 import pickle as pkl
 import argparse
 import matplotlib.pyplot as plt
@@ -199,17 +200,153 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
             pkl.dump((latent_knn_dist, output_knn_dist), f)
 
 
+def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./results/ar/outlier', train=True):
+
+    print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for AR. \n'
+                             f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
+          + 100 * '-')
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.manual_seed(random_seed)
+
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+    ar_coefs = np.array([.7, .25])
+    outlier_ar_coefs = np.array([-.7, .25])
+    length = 50
+    n_samples = 10000
+    corpus_size = 1000
+    batch_size_simplex = 100
+    half_batch_size = int(batch_size_simplex/2)
+    n_epoch_simplex = 20000
+
+    X, Y = generate_ar(ar_coefs, random_seed + cv, length, n_samples)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.1, random_state=random_seed + cv)
+    X_train = X_train.reshape(len(X_train), -1, 1)
+    X_train = torch.from_numpy(X_train).float()
+    X_test = X_test.reshape(len(X_test), -1, 1)
+    X_test = torch.from_numpy(X_test).float().to(device)
+    Y_train = Y_train.reshape(len(Y_train), -1, 1)
+    Y_train = torch.from_numpy(Y_train).float()
+    Y_test = Y_test.reshape(len(Y_test), -1, 1)
+    Y_test = torch.from_numpy(Y_test).float().to(device)
+    training_set = TimeSeriesDataset(X_train, Y_train)
+    test_set = TimeSeriesDataset(X_test, Y_test)
+    train_loader = torch.utils.data.DataLoader(training_set, batch_size=20, shuffle=True)
+
+    model = TimeSeriesForecaster().to(device)
+    opt = torch.optim.Adam(params=model.parameters())
+
+    if train:
+        model.hidden = model.init_hidden(batch_size=len(X_test))
+        print(f'Initial Test MSE: {torch.mean((Y_test - model(X_test)) ** 2):.3g}')
+        model.train()
+        for epoch in range(20):
+            for X, Y in train_loader:
+                X = X.to(device)
+                Y = Y.to(device)
+                model.hidden = model.init_hidden(batch_size=len(X))
+                opt.zero_grad()
+                Y_pred = model(X)
+                error = torch.sum((Y - Y_pred) ** 2)
+                error.backward()
+                opt.step()
+            if (epoch+1) % 5 == 0:
+                model.hidden = model.init_hidden(batch_size=len(X_test))
+                print(f'Epoch {epoch + 1}: Test MSE = {torch.mean((Y_test - model(X_test)) ** 2):.3g}.')
+        model_path = os.path.join(save_path, f'model_cv{cv}.pth')
+        print(f'Saving the model in {model_path}.')
+        torch.save(model.state_dict(), model_path)
+
+    model = TimeSeriesForecaster()
+    model.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    model.to(device)
+
+    corpus_loader = torch.utils.data.DataLoader(training_set, batch_size=corpus_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=int(batch_size_simplex/2))
+    n_outlier = len(X_test)
+    X_outlier, Y_outlier = generate_ar(outlier_ar_coefs, random_seed + cv, length, n_outlier)
+    X_outlier = torch.from_numpy(X_outlier).float().to(device).reshape(len(X_outlier), -1, 1)
+    outlier_set = TimeSeriesDataset(X_outlier, Y_outlier)
+    outlier_loader = torch.utils.data.DataLoader(outlier_set, batch_size=int(batch_size_simplex/2))
+    X_corpus, _ = next(iter(corpus_loader))
+    X_corpus = X_corpus.to(device)
+    model.hidden = model.init_hidden(len(X_corpus))
+    latent_corpus = model.latent_representation(X_corpus).detach()
+
+    simplex = Simplex(X_corpus, latent_corpus)
+    knn_uniform = NearNeighLatent(X_corpus, latent_corpus)
+    knn_dist = NearNeighLatent(X_corpus, latent_corpus, weights_type='distance')
+
+    latent_true = np.zeros((len(X_test), model.hidden_dim))
+    latent_simplex = np.zeros((len(X_test), model.hidden_dim))
+    latent_knn_uniform = np.zeros((len(X_test), model.hidden_dim))
+    latent_knn_dist = np.zeros((len(X_test), model.hidden_dim))
+    outlier_latent_true = np.zeros((len(X_outlier), model.hidden_dim))
+    outlier_latent_simplex = np.zeros((len(X_outlier), model.hidden_dim))
+    outlier_latent_knn_uniform = np.zeros((len(X_outlier), model.hidden_dim))
+    outlier_latent_knn_dist = np.zeros((len(X_outlier), model.hidden_dim))
+
+
+    for n_batch, ((x_test, _), (x_outlier, _)) in enumerate(zip(test_loader, outlier_loader)):
+        print(20 * '-' + f'Now working with batch {n_batch+1} /'
+                         f' {int((len(X_outlier)+len(X_test))/batch_size_simplex)}' + 20 * '-')
+
+        x_merge = torch.cat((x_test, x_outlier))
+        x_merge = x_merge.to(device)
+        model.hidden = model.init_hidden(len(x_merge))
+        latent_merge = model.latent_representation(x_merge).detach()
+        id_init, id_end = int(n_batch * batch_size_simplex / 2), int((n_batch + 1) * batch_size_simplex / 2)
+        latent_true[id_init:id_end, :] = latent_merge[:half_batch_size].cpu().numpy()
+        outlier_latent_true[id_init:id_end, :] = latent_merge[half_batch_size:].cpu().numpy()
+        simplex.fit(x_merge, latent_merge, n_epoch=n_epoch_simplex, reg_factor=0)
+        latent_simplex[id_init:id_end, :] = simplex.latent_approx().cpu().numpy()[:half_batch_size]
+        outlier_latent_simplex[id_init:id_end, :] = simplex.latent_approx().cpu().numpy()[half_batch_size:]
+        knn_uniform.fit(x_merge, latent_merge, n_keep=3)
+        latent_knn_uniform[id_init:id_end, :] = knn_uniform.latent_approx().cpu().numpy()[:half_batch_size]
+        outlier_latent_knn_uniform[id_init:id_end, :] = simplex.latent_approx().cpu().numpy()[half_batch_size:]
+        knn_dist.fit(x_merge, latent_merge, n_keep=3)
+        latent_knn_dist[id_init:id_end, :] = knn_dist.latent_approx().cpu().numpy()[:half_batch_size]
+        outlier_latent_knn_dist[id_init:id_end, :] = simplex.latent_approx().cpu().numpy()[half_batch_size:]
+
+
+    all_latent_true = np.concatenate((latent_true, outlier_latent_true))
+    all_latent_simplex = np.concatenate((latent_simplex, outlier_latent_simplex))
+    all_latent_knn_uniform = np.concatenate((latent_knn_uniform, outlier_latent_knn_uniform))
+    all_latent_knn_dist = np.concatenate((latent_knn_dist, outlier_latent_knn_dist))
+    residuals_simplex = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_simplex)**2).sum(axis=-1)))
+    residuals_knn_uniform = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_uniform) ** 2).sum(axis=-1)))
+    residuals_knn_dist = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_dist) ** 2).sum(axis=-1)))
+
+
+    n_inspected = [n for n in range(1, len(residuals_simplex))]
+    simplex_n_detected = [torch.count_nonzero(torch.topk(residuals_simplex, k=n)[1] > n_outlier-1) for n in n_inspected]
+    nn_dist_n_detected = [torch.count_nonzero(torch.topk(residuals_knn_dist, k=n)[1] > n_outlier-1) for n in n_inspected]
+    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(residuals_knn_uniform, k=n)[1] > n_outlier-1) for n in n_inspected]
+    sns.set()
+    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
+    plt.plot(n_inspected, nn_dist_n_detected, label='3NN Distance')
+    plt.plot(n_inspected, nn_uniform_n_detected, label='3NN Uniform')
+    plt.xlabel('Number of inspected examples')
+    plt.ylabel('Number of outliers detected')
+    plt.legend()
+    plt.show()
+
+
 
 
 def main(experiment: str = 'precision', cv: int = 0):
     if experiment == 'precision':
         ar_precision(cv=cv)
-    elif experiment == 'outlier_detection':
-        pass
+    elif experiment == 'outlier':
+        outlier_detection(cv=cv, train=False)
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='precision', help='Experiment to perform')
+parser.add_argument('-experiment', type=str, default='outlier', help='Experiment to perform')
 parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
 args = parser.parse_args()
 
