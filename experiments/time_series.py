@@ -321,6 +321,16 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     residuals_knn_uniform = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_uniform) ** 2).sum(axis=-1)))
     residuals_knn_dist = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_dist) ** 2).sum(axis=-1)))
 
+    print(f'Saving results in {save_path}.')
+    with open(os.path.join(save_path, f'simplex_cv{cv}.pkl')) as f:
+        pkl.dump(all_latent_simplex, f)
+    with open(os.path.join(save_path, f'true_cv{cv}.pkl')) as f:
+        pkl.dump(all_latent_true, f)
+    with open(os.path.join(save_path, f'knn_uniform_cv{cv}.pkl')) as f:
+        pkl.dump(all_latent_knn_uniform, f)
+    with open(os.path.join(save_path, f'knn_dist_cv{cv}.pkl')) as f:
+        pkl.dump(all_latent_knn_dist, f)
+
 
     n_inspected = [n for n in range(1, len(residuals_simplex))]
     simplex_n_detected = [torch.count_nonzero(torch.topk(residuals_simplex, k=n)[1] > n_outlier-1) for n in n_inspected]
@@ -342,7 +352,7 @@ def main(experiment: str = 'precision', cv: int = 0):
     if experiment == 'precision':
         ar_precision(cv=cv)
     elif experiment == 'outlier':
-        outlier_detection(cv=cv, train=False)
+        outlier_detection(cv=cv)
 
 
 parser = argparse.ArgumentParser()
