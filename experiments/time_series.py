@@ -190,13 +190,13 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
         print(f'KNN Distance: R2 Latent = {r2_score(latent_true, latent_knn_dist):.3g} ; '
               f'R2 Output = {r2_score(output_true, output_knn_dist):.3g}')
         print(f'Saving the results in {save_path}.')
-        with open(os.path.join(save_path, f'true_k{k}_cv{cv}'), 'wb') as f:
+        with open(os.path.join(save_path, f'true_k{k}_cv{cv}.pkl'), 'wb') as f:
             pkl.dump((latent_true, output_true), f)
-        with open(os.path.join(save_path, f'simplex_k{k}_cv{cv}'), 'wb') as f:
+        with open(os.path.join(save_path, f'simplex_k{k}_cv{cv}.pkl'), 'wb') as f:
             pkl.dump((latent_simplex, output_simplex), f)
-        with open(os.path.join(save_path, f'knn_uniform_k{k}_cv{cv}'), 'wb') as f:
+        with open(os.path.join(save_path, f'knn_uniform_k{k}_cv{cv}.pkl'), 'wb') as f:
             pkl.dump((latent_knn_uniform, output_knn_uniform), f)
-        with open(os.path.join(save_path, f'knn_dist_k{k}_cv{cv}'), 'wb') as f:
+        with open(os.path.join(save_path, f'knn_dist_k{k}_cv{cv}.pkl'), 'wb') as f:
             pkl.dump((latent_knn_dist, output_knn_dist), f)
 
 
@@ -322,13 +322,13 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     residuals_knn_dist = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_dist) ** 2).sum(axis=-1)))
 
     print(f'Saving results in {save_path}.')
-    with open(os.path.join(save_path, f'simplex_cv{cv}.pkl')) as f:
+    with open(os.path.join(save_path, f'simplex_cv{cv}.pkl'), 'wb') as f:
         pkl.dump(all_latent_simplex, f)
-    with open(os.path.join(save_path, f'true_cv{cv}.pkl')) as f:
+    with open(os.path.join(save_path, f'true_cv{cv}.pkl'), 'wb') as f:
         pkl.dump(all_latent_true, f)
-    with open(os.path.join(save_path, f'knn_uniform_cv{cv}.pkl')) as f:
+    with open(os.path.join(save_path, f'knn_uniform_cv{cv}.pkl'), 'wb') as f:
         pkl.dump(all_latent_knn_uniform, f)
-    with open(os.path.join(save_path, f'knn_dist_cv{cv}.pkl')) as f:
+    with open(os.path.join(save_path, f'knn_dist_cv{cv}.pkl'), 'wb') as f:
         pkl.dump(all_latent_knn_dist, f)
 
 
