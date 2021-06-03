@@ -346,7 +346,7 @@ def main(experiment: str, cv: int):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='outlier', help='Experiment to perform')
+parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
 parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
 args = parser.parse_args()
 

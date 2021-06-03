@@ -20,7 +20,8 @@ from torch.utils.data import DataLoader
 from visualization.tables import plot_prostate_patient
 
 
-def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_model: bool = True):
+def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_model: bool = True, test_id: int = 22,
+                   n_keep: int = 3):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -29,8 +30,6 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
     corpus_size = 1000
     n_epoch = 10
     log_interval = 100
-    n_keep = 3
-    test_id = 22
 
     print(20 * '-' + f'Welcome in the use case for MNIST' + 20 * '-')
 
@@ -117,7 +116,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
 
     input_baseline = -0.4242 * torch.ones(corpus_inputs.shape, device=device)
     jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
-                                                       n_bins=500)
+                                                       n_bins=200)
     decomposition = simplex.decompose(0)
 
     output = classifier(test_inputs)
@@ -134,7 +133,8 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
         # plt.savefig(os.path.join(save_path, f'corpus_image{i + 1}_id{test_id}'))
 
 
-def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True):
+def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True,
+                      n_keep: int = 3, test_id: int = 123):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -143,8 +143,6 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     corpus_size = 1000
     n_epoch = 10
     log_interval = 100
-    n_keep = 3
-    test_id = 123
 
     print(20 * '-' + f'Welcome in the use case for Prostate Cancer' + 20 * '-')
 
@@ -238,7 +236,7 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     # input_baseline[:, :3] = torch.mean(corpus_inputs, dim=0, keepdim=True)[:, :3]
     input_baseline = torch.mean(corpus_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
     jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
-                                                       n_bins=500)
+                                                       n_bins=200)
     decomposition = simplex.decompose(0)
 
     output = classifier(test_inputs)
@@ -413,6 +411,6 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
 
 
 if __name__ == '__main__':
-    # mnist_use_case(train_model=False)
-    # prostate_use_case(train_model=False)
-    prostate_two_corpus(train_model=False)
+    # mnist_use_case(train_model=False, test_id=123, n_keep=2)
+    prostate_use_case(train_model=False, test_id=156, n_keep=3)
+    # prostate_two_corpus(train_model=False)
