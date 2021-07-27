@@ -1,31 +1,52 @@
+import numpy as np
 import torch
 import torchvision
 import torch.optim as optim
 import os
+import json
 import seaborn as sns
+import math
 import sklearn
 import argparse
 import pickle as pkl
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import pytorch_influence_functions as ptif
 from models.image_recognition import MnistClassifier
 from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
+from torch.utils.data import Dataset
 from visualization.images import plot_mnist
-import matplotlib.pyplot as plt
 
 
 # Load data
-def load_mnist(batch_size: int, train: bool):
-    return torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('./data/', train=train, download=True,
-                                   transform=torchvision.transforms.Compose([
-                                       torchvision.transforms.ToTensor(),
-                                       torchvision.transforms.Normalize(
-                                           (0.1307,), (0.3081,))
-                                   ])),
-        batch_size=batch_size, shuffle=True)
+
+class MNISTSubset(Dataset):
+    def __init__(self, X, y=None):
+        self.X = X
+        self.y = y
+
+    def __len__(self):
+        return (len(self.X))
+
+    def __getitem__(self, i):
+        if torch.is_tensor(i):
+            i = i.tolist()
+        return self.X[i], self.y[i]
+
+
+def load_mnist(batch_size: int, train: bool, subset_size=None, shuffle=True):
+    dataset = torchvision.datasets.MNIST('./data/', train=train, download=True,
+                                         transform=torchvision.transforms.Compose([
+                                             torchvision.transforms.ToTensor(),
+                                             torchvision.transforms.Normalize(
+                                                 (0.1307,), (0.3081,))
+                                         ]))
+    if subset_size:
+        dataset = torch.utils.data.Subset(dataset, torch.randperm(len(dataset))[:subset_size])
+    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
 def load_emnist(batch_size: int, train: bool):
@@ -206,7 +227,6 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']
 
-
     # Create saving directory if inexistent
     if not os.path.exists(save_path):
         print(f'Creating the saving directory {save_path}')
@@ -246,6 +266,79 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     output_approx = representer.output_approx()
     output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
     print(f'representer output r2 = {output_r2_score:.2g}.')
+
+
+# Redo the quality experiment with influence functions
+def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
+                       save_path: str = './results/mnist/influence/', batch_size: int = 20,
+                       corpus_size: int = 1000, test_size: int = 100):
+    print(100 * '-' + '\n' + 'Welcome in the influence function computation for MNIST. \n'
+                             f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
+          + 100 * '-')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.random.manual_seed(random_seed + cv)
+
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+    # Load the model
+    classifier = MnistClassifier()
+    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.to(device)
+    classifier.eval()
+
+    corpus_loader = load_mnist(subset_size=corpus_size, train=True, batch_size=corpus_size)
+    test_loader = load_mnist(subset_size=100, train=False, batch_size=20, shuffle=False)
+
+    corpus_features = next(iter(corpus_loader))[0].to(device)
+    corpus_latent_reps = classifier.latent_representation(corpus_features).detach()
+    scheduler = ExponentialScheduler(0.1, 100, 20000)
+
+    with open(os.path.join(save_path, f'corpus_latent_reps_cv{cv}.pkl'), 'wb') as f:
+        pkl.dump(corpus_latent_reps.cpu().numpy(), f)
+
+    test_latent_reps = np.zeros((test_size, corpus_latent_reps.shape[-1]))
+    for batch_id, batch in enumerate(test_loader):
+        test_latent_reps[batch_id * len(batch[0]):(batch_id + 1) * len(batch[0]), :] = \
+            classifier.latent_representation(batch[0].to(device)).detach().cpu().numpy()
+    with open(os.path.join(save_path, f'test_latent_reps_cv{cv}.pkl'), 'wb') as f:
+        pkl.dump(test_latent_reps, f)
+
+    print(30*'-' + f'Fitting SimplEx' + 30*'-')
+    for n_keep in n_keep_list:
+        print(20*'-' + f'Training Simplex by allowing to keep {n_keep} corpus examples' + 20*'-')
+        weights = np.zeros((test_size, corpus_size))
+        for batch_id, batch in enumerate(test_loader):
+            print(20 * '-' + f'Working with batch {batch_id+1} / {math.ceil(test_size/batch_size)}' + 20 * '-')
+            simplex = Simplex(corpus_features, corpus_latent_reps)
+            test_features = batch[0].to(device)
+            test_latent_reps = classifier.latent_representation(test_features).detach()
+            simplex.fit(test_features, test_latent_reps, n_keep=n_keep, reg_factor=0.1,
+                        reg_factor_scheduler=scheduler, n_epoch=20000)
+            weights_batch = simplex.weights.cpu().numpy()
+            weights[batch_id*len(weights_batch):(batch_id+1)*len(weights_batch), :] = weights_batch
+
+        with open(os.path.join(save_path, f'simplex_weights_cv{cv}_n{n_keep}.pkl'), 'wb') as f:
+            pkl.dump(weights, f)
+
+    print(30 * '-' + f'Computing Influence Functions' + 30 * '-')
+    ptif.init_logging()
+    config = ptif.get_default_config()
+    config['outdir'] = save_path
+    config['test_sample_num'] = False
+    ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
+
+
+    '''''
+    with open(os.path.join(save_path, 'influence_results_0_False.json')) as f:
+        influence_dic = json.load(f)
+    best0 = influence_dic['0']['helpful'][0]
+    print(influence_dic['0']['influence'][best0])
+    '''''
+
+
 
 
 # Outlier Detection experiment
@@ -339,10 +432,13 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
 
 def main(experiment: str, cv: int):
+    '''
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv, n_keep_list=[n for n in range(2, 51)])
     elif experiment == 'outlier':
         outlier_detection(cv)
+    '''
+    influence_function(n_keep_list=[2, 3, 4, 5, 10, 20, 30, 40, 50])
 
 
 parser = argparse.ArgumentParser()
