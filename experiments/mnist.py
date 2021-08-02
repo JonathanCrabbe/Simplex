@@ -331,16 +331,6 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
 
 
-    '''''
-    with open(os.path.join(save_path, 'influence_results_0_False.json')) as f:
-        influence_dic = json.load(f)
-    best0 = influence_dic['0']['helpful'][0]
-    print(influence_dic['0']['influence'][best0])
-    '''''
-
-
-
-
 # Outlier Detection experiment
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/',
                       train: bool = True):
@@ -438,7 +428,7 @@ def main(experiment: str, cv: int):
     elif experiment == 'outlier':
         outlier_detection(cv)
     '''
-    influence_function(n_keep_list=[2, 3, 4, 5, 10, 20, 30, 40, 50])
+    influence_function(n_keep_list=[2, 3, 4, 5, 10, 20, 30, 40, 50], cv=3)
 
 
 parser = argparse.ArgumentParser()
