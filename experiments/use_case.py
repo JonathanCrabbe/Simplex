@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 import os
+import captum as cap
+import pytorch_influence_functions as ptif
 import torch.optim as optim
 import seaborn as sns
 import torch.nn.functional as F
@@ -143,6 +145,7 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     corpus_size = 1000
     n_epoch = 10
     log_interval = 100
+    test_id = 12
 
     print(20 * '-' + f'Welcome in the use case for Prostate Cancer' + 20 * '-')
 
@@ -235,9 +238,9 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     # input_baseline = torch.zeros(corpus_inputs.shape, device=device)
     # input_baseline[:, :3] = torch.mean(corpus_inputs, dim=0, keepdim=True)[:, :3]
     input_baseline = torch.mean(corpus_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
-    jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
+    jacobian_projections = simplex.jacobian_projection(test_id=test_id, model=classifier, input_baseline=input_baseline,
                                                        n_bins=200)
-    decomposition = simplex.decompose(0)
+    decomposition = simplex.decompose(test_id)
 
     output = classifier(test_inputs)
     title = f'Predicted Mortality: {output.data.max(1, keepdim=True)[1][0].item()}'
