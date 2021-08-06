@@ -447,13 +447,14 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
 
 def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobian_projections/',
-                              corpus_size=500, test_size=10, n_bins=100, batch_size=20):
+                              corpus_size=500, test_size=50, n_bins=100, batch_size=20):
     print(100 * '-' + '\n' + 'Welcome in the Jacobian Projection check for MNIST. \n'
                              f'Settings: random_seed = {random_seed} .\n'
           + 100 * '-')
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
+    n_pert_list = [1, 5, 10, 50]
 
     # Create saving directory if inexistent
     if not os.path.exists(save_path):
@@ -466,18 +467,19 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
     classifier.to(device)
     classifier.eval()
 
-
     # Prepare the corpus and the test set
     corpus_loader = load_mnist(subset_size=corpus_size, train=True, batch_size=batch_size)
     test_loader = load_mnist(subset_size=test_size, train=False, batch_size=1, shuffle=False)
+    Corpus_inputs = torch.zeros((corpus_size, 1, 28, 28), device=device)
 
     # Prepare the IG baseline
     ig_explainer = captum.attr.IntegratedGradients(classifier)
-
+    Corpus_inputs_pert_jp = torch.zeros((len(n_pert_list), corpus_size, 1, 28, 28), device=device)
+    Corpus_inputs_pert_ig = torch.zeros((len(n_pert_list), corpus_size, 1, 28, 28), device=device)
 
 
     for test_id, (test_input, _) in enumerate(test_loader):
-        print(25*'='+ f'Now working with test sample {test_id+1}/{test_size}' + 25*'=')
+        print(25*'=' + f'Now working with test sample {test_id+1}/{test_size}' + 25*'=')
         for batch_id, (corpus_inputs, corpus_targets) in enumerate(corpus_loader):
             print(f'Now working with corpus batch {batch_id+1}/{math.ceil(corpus_size/batch_size)}.')
             test_input = test_input.to(device)
@@ -500,8 +502,70 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
             integrated_gradients = ig_explainer.attribute(corpus_inputs, baseline_inputs,
                                                           target=corpus_targets.to(device),
                                                           n_steps=n_bins)
-            print(jacobian_projections.shape)
-            print(integrated_gradients.shape)
+            saliency_jp = torch.abs(jacobian_projections).detach()
+            saliency_ig = torch.abs(integrated_gradients).detach()
+
+            lower_id =  batch_id * batch_size
+            higher_id = lower_id + batch_size
+            Corpus_inputs[lower_id:higher_id] = corpus_inputs.detach()
+
+            for pert_id, n_pert in enumerate(n_pert_list):
+                top_pixels_jp = torch.topk(saliency_jp.view(batch_size, -1), k=n_pert)[1]
+                top_pixels_ig = torch.topk(saliency_ig.view(batch_size, -1), k=n_pert)[1]
+                mask_jp = torch.zeros(corpus_inputs.shape, device=device)
+                mask_ig = torch.zeros(corpus_inputs.shape, device=device)
+                for k in range(n_pert):
+                    mask_jp[:, 0, top_pixels_jp[:, k] // 28, top_pixels_jp[:, k] % 28] = 1
+                    mask_ig[:, 0, top_pixels_ig[:, k] // 28, top_pixels_ig[:, k] % 28] = 1
+                corpus_inputs_pert_jp = mask_jp*baseline_inputs + (1-mask_jp)*corpus_inputs
+                corpus_inputs_pert_ig = mask_ig * baseline_inputs + (1 - mask_ig) * corpus_inputs
+                Corpus_inputs_pert_jp[pert_id, lower_id:higher_id] = corpus_inputs_pert_jp
+                Corpus_inputs_pert_ig[pert_id, lower_id:higher_id] = corpus_inputs_pert_ig
+
+        print('Now fitting the uncorrupted SimplEx')
+        test_latent = classifier.latent_representation(test_input).detach().to(device)
+        simplex = Simplex(Corpus_inputs, classifier.latent_representation(Corpus_inputs).detach())
+        simplex.fit(test_input, test_latent, reg_factor=0)
+        residual = torch.sum((test_latent - simplex.latent_approx()) ** 2)
+
+        for pert_id, n_pert in enumerate(n_pert_list):
+
+            print(f'Now fitting the JP-corrupted SimplEx with {n_pert} perturbation per image')
+            simplex_jp = Simplex(Corpus_inputs_pert_jp[pert_id],
+                                 classifier.latent_representation(Corpus_inputs_pert_jp[pert_id]).detach())
+            simplex_jp.fit(test_input, test_latent, reg_factor=0)
+            residual_jp = torch.sum((test_latent - simplex_jp.latent_approx())**2)
+
+            print(f'Now fitting the IG-corrupted SimplEx with {n_pert} perturbation per image')
+            simplex_ig = Simplex(Corpus_inputs_pert_ig[pert_id],
+                                 classifier.latent_representation(Corpus_inputs_pert_ig[pert_id]).detach())
+            simplex_ig.fit(test_input, test_latent, reg_factor=0)
+            residual_ig = torch.sum((test_latent - simplex_ig.latent_approx()) ** 2)
+            print(residual_jp-residual)
+            print(residual_ig-residual)
+
+
+
+'''
+corpus_latents = classifier.latent_representation(corpus_inputs.detach()).detach()
+corpus_latents_pert_jp = classifier.latent_representation(corpus_inputs_pert_jp).detach()
+corpus_latents_pert_ig = classifier.latent_representation(corpus_inputs_pert_ig).detach()
+proj_initial = torch.einsum('bd,bd->b', corpus_latents, test_latent)
+cos_initial = proj_initial/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents**2, dim=-1))
+proj_jp = torch.einsum('bd,bd->b', corpus_latents_pert_jp, test_latent)
+cos_jp = proj_jp/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents_pert_jp**2, dim=-1))
+proj_ig = torch.einsum('bd,bd->b', corpus_latents_pert_ig, test_latent)
+cos_ig = proj_ig/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents_pert_ig**2, dim=-1))
+cos_shift_jp = torch.abs(cos_initial - cos_jp).cpu()
+cos_shift_ig = torch.abs(cos_initial - cos_ig).cpu()
+
+   print(metrics_tensor[0].mean(dim=-1))
+   print(metrics_tensor[0].std(dim=-1))
+   print(metrics_tensor[1].mean(dim=-1))
+   print(metrics_tensor[1].std(dim=-1))
+'''
+
+
 
 
 def main(experiment: str, cv: int):
