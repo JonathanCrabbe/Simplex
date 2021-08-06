@@ -1,9 +1,10 @@
+import captum.attr
 import numpy as np
 import torch
 import torchvision
 import torch.optim as optim
 import os
-import json
+import math
 import seaborn as sns
 import math
 import sklearn
@@ -218,7 +219,12 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
     return representer
 
 
-# Approximation Quality experiment
+'''
+        ----------------------------
+        Precision experiment
+        ----------------------------
+'''
+
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
                           model_reg_factor=0.1, save_path: str = './results/mnist/quality/'):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
@@ -268,7 +274,13 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-# Redo the quality experiment with influence functions
+'''
+        ----------------------------
+        Influence Function experiment
+        ----------------------------
+'''
+
+
 def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
                        save_path: str = './results/mnist/influence/', batch_size: int = 20,
                        corpus_size: int = 1000, test_size: int = 100):
@@ -331,7 +343,13 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
 
 
-# Outlier Detection experiment
+'''
+        ----------------------------
+        Outlier Detection experiment
+        ----------------------------
+'''
+
+
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/',
                       train: bool = True):
     torch.random.manual_seed(random_seed + cv)
@@ -421,14 +439,78 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     plt.show()
 
 
+'''
+        ----------------------------
+        Jacobian Projection experiment
+        ----------------------------
+'''
+
+
+def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobian_projections/',
+                              corpus_size=500, test_size=10, n_bins=100, batch_size=20):
+    print(100 * '-' + '\n' + 'Welcome in the Jacobian Projection check for MNIST. \n'
+                             f'Settings: random_seed = {random_seed} .\n'
+          + 100 * '-')
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    torch.random.manual_seed(random_seed)
+
+    # Create saving directory if inexistent
+    if not os.path.exists(save_path):
+        print(f'Creating the saving directory {save_path}')
+        os.makedirs(save_path)
+
+    # Load the model
+    classifier = MnistClassifier()
+    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model.pth')))
+    classifier.to(device)
+    classifier.eval()
+
+
+    # Prepare the corpus and the test set
+    corpus_loader = load_mnist(subset_size=corpus_size, train=True, batch_size=batch_size)
+    test_loader = load_mnist(subset_size=test_size, train=False, batch_size=1, shuffle=False)
+
+    # Prepare the IG baseline
+    ig_explainer = captum.attr.IntegratedGradients(classifier)
+
+
+
+    for test_id, (test_input, _) in enumerate(test_loader):
+        print(25*'='+ f'Now working with test sample {test_id+1}/{test_size}' + 25*'=')
+        for batch_id, (corpus_inputs, corpus_targets) in enumerate(corpus_loader):
+            print(f'Now working with corpus batch {batch_id+1}/{math.ceil(corpus_size/batch_size)}.')
+            test_input = test_input.to(device)
+            corpus_inputs = corpus_inputs.to(device).requires_grad_()
+            baseline_inputs = -0.4242 * torch.ones(corpus_inputs.shape, device=device)
+            input_shift = corpus_inputs - baseline_inputs
+            test_latent = classifier.latent_representation(test_input).detach()
+            baseline_latents = classifier.latent_representation(baseline_inputs)
+            latent_shift = test_latent - baseline_latents
+            latent_shift_sqrdnorm = torch.sum(latent_shift ** 2, dim=-1, keepdim=True)
+            input_grad = torch.zeros(corpus_inputs.shape, device=corpus_inputs.device)
+            for n in range(1, n_bins + 1):
+                t = n / n_bins
+                inputs = baseline_inputs + t * (corpus_inputs - baseline_inputs)
+                latent_reps = classifier.latent_representation(inputs)
+                latent_reps.backward(gradient=latent_shift / latent_shift_sqrdnorm)
+                input_grad += corpus_inputs.grad
+                corpus_inputs.grad.data.zero_()
+            jacobian_projections = input_shift * input_grad/n_bins
+            integrated_gradients = ig_explainer.attribute(corpus_inputs, baseline_inputs,
+                                                          target=corpus_targets.to(device),
+                                                          n_steps=n_bins)
+            print(jacobian_projections.shape)
+            print(integrated_gradients.shape)
+
+
 def main(experiment: str, cv: int):
-    '''
+
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv, n_keep_list=[n for n in range(2, 51)])
     elif experiment == 'outlier':
         outlier_detection(cv)
-    '''
-    influence_function(n_keep_list=[2, 3, 4, 5, 10, 20, 30, 40, 50], cv=3)
+
 
 
 parser = argparse.ArgumentParser()
@@ -437,7 +519,8 @@ parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    main(args.experiment, args.cv)
+    jacobian_projection_check()
+    #main(args.experiment, args.cv)
 
 '''
 
