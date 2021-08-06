@@ -136,7 +136,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
 
 
 def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True,
-                      n_keep: int = 3, test_id: int = 123):
+                      n_keep: int = 3, test_id=12):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -145,7 +145,7 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     corpus_size = 1000
     n_epoch = 10
     log_interval = 100
-    test_id = 12
+
 
     print(20 * '-' + f'Welcome in the use case for Prostate Cancer' + 20 * '-')
 
@@ -230,27 +230,44 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     test_examples = enumerate(test_loader)
     _, (test_inputs, test_target) = next(test_examples)
     test_inputs = test_inputs[test_id:test_id + 1].to(device).detach()
+    output = classifier(test_inputs)
+    predicted_mortality = output.data.max(1, keepdim=True)[1][0].item()
+    input_baseline = torch.mean(corpus_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
+
+    # Plot the selected example
+    title = f'Predicted Mortality: {predicted_mortality}'
+    plot_prostate_patient(test_inputs[0].cpu().numpy(), title)
+    plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
+    plt.show()
+
+
+    # Generate a SHAP explanation:
+    shap_expl = cap.attr.KernelShap(classifier)
+    shap_attr = shap_expl.attribute(test_inputs, target=predicted_mortality, baselines=input_baseline[0])[0].cpu().numpy()
+    title = 'SHAP Saliency'
+    plot_prostate_patient(test_inputs[0].cpu().numpy(), title, shap_attr)
+    plt.savefig(os.path.join(save_path, f'shap_test_patient_id{test_id}'))
+    plt.show()
+
+
+
+    # Generate a SimplEx explanation:
     simplex = Simplex(corpus_inputs, classifier.latent_representation(corpus_inputs).detach())
     scheduler = ExponentialScheduler(x_init=0.1, x_final=100, n_epoch=20000)
     weights = simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
                           n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
-
     # input_baseline = torch.zeros(corpus_inputs.shape, device=device)
     # input_baseline[:, :3] = torch.mean(corpus_inputs, dim=0, keepdim=True)[:, :3]
-    input_baseline = torch.mean(corpus_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
-    jacobian_projections = simplex.jacobian_projection(test_id=test_id, model=classifier, input_baseline=input_baseline,
-                                                       n_bins=200)
-    decomposition = simplex.decompose(test_id)
+    jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
+                                                       n_bins=100)
+    decomposition, sort_id = simplex.decompose(0, return_id=True)
 
-    output = classifier(test_inputs)
-    title = f'Predicted Mortality: {output.data.max(1, keepdim=True)[1][0].item()}'
-    plot_prostate_patient(test_inputs[0].cpu().numpy(), title)
-    plt.show()
-    plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
+
     for i in range(n_keep):
         input = decomposition[i][1].cpu().numpy()
+        target = corpus_target[sort_id[i]]
         saliency = decomposition[i][2].cpu().numpy()
-        title = f'Weight: {decomposition[i][0]:.2g}'
+        title = f'Weight: {decomposition[i][0]:.2g} ; True Outcome: {target}'
         plot_prostate_patient(input, title, saliency)
         plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
         plt.show()
@@ -415,5 +432,5 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
 
 if __name__ == '__main__':
     # mnist_use_case(train_model=False, test_id=123, n_keep=2)
-    prostate_use_case(train_model=False, test_id=156, n_keep=3)
+    prostate_use_case(train_model=False, test_id=6, n_keep=3)
     # prostate_two_corpus(train_model=False)
