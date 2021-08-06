@@ -447,7 +447,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
 
 def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobian_projections/',
-                              corpus_size=500, test_size=50, n_bins=100, batch_size=20):
+                              corpus_size=500, test_size=100, n_bins=100, batch_size=20):
     print(100 * '-' + '\n' + 'Welcome in the Jacobian Projection check for MNIST. \n'
                              f'Settings: random_seed = {random_seed} .\n'
           + 100 * '-')
@@ -455,6 +455,7 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     n_pert_list = [1, 5, 10, 50]
+    residual_tensor = torch.zeros(2, len(n_pert_list), test_size)
 
     # Create saving directory if inexistent
     if not os.path.exists(save_path):
@@ -504,8 +505,7 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
                                                           n_steps=n_bins)
             saliency_jp = torch.abs(jacobian_projections).detach()
             saliency_ig = torch.abs(integrated_gradients).detach()
-
-            lower_id =  batch_id * batch_size
+            lower_id = batch_id * batch_size
             higher_id = lower_id + batch_size
             Corpus_inputs[lower_id:higher_id] = corpus_inputs.detach()
 
@@ -529,20 +529,25 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
         residual = torch.sum((test_latent - simplex.latent_approx()) ** 2)
 
         for pert_id, n_pert in enumerate(n_pert_list):
-
-            print(f'Now fitting the JP-corrupted SimplEx with {n_pert} perturbation per image')
+            print(f'Now fitting the JP-corrupted SimplEx with {n_pert} perturbation(s) per image')
             simplex_jp = Simplex(Corpus_inputs_pert_jp[pert_id],
                                  classifier.latent_representation(Corpus_inputs_pert_jp[pert_id]).detach())
             simplex_jp.fit(test_input, test_latent, reg_factor=0)
             residual_jp = torch.sum((test_latent - simplex_jp.latent_approx())**2)
 
-            print(f'Now fitting the IG-corrupted SimplEx with {n_pert} perturbation per image')
+            print(f'Now fitting the IG-corrupted SimplEx with {n_pert} perturbation(s) per image')
             simplex_ig = Simplex(Corpus_inputs_pert_ig[pert_id],
                                  classifier.latent_representation(Corpus_inputs_pert_ig[pert_id]).detach())
             simplex_ig.fit(test_input, test_latent, reg_factor=0)
             residual_ig = torch.sum((test_latent - simplex_ig.latent_approx()) ** 2)
-            print(residual_jp-residual)
-            print(residual_ig-residual)
+            residual_tensor[0, pert_id, test_id] = (residual_jp - residual).cpu()
+            residual_tensor[1, pert_id, test_id] = (residual_ig - residual).cpu()
+
+    q = torch.tensor([.25, .5, .75])
+    print(torch.quantile(residual_tensor[0], q, dim=-1))
+    print(torch.quantile(residual_tensor[1], q, dim=-1))
+
+
 
 
 
