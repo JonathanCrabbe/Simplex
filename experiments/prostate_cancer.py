@@ -437,6 +437,63 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     plt.show()
 
 
+'''
+----------------------------------------------------
+ Study the effect of corpus size on residual
+----------------------------------------------------
+'''
+
+
+def corpus_size_effect(random_seed=42):
+    torch.random.manual_seed(random_seed)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for Prostate Cancer. \n'
+                             f'Settings: random_seed = {random_seed} ; device = {device}.\n'
+          + 100 * '-')
+
+    corpus_sizes = [50, 100, 500, 1000]
+    test_size = 100
+    residuals = torch.zeros(len(corpus_sizes), 4)
+    for cv in range(4):
+        print(25*'=' + f'Now working with cv = {cv}.' + 25*'=')
+        # Load model:
+        classifier = MortalityPredictor(n_cont=3)
+        classifier.load_state_dict(torch.load(os.path.join('./results/prostate/quality', f'model_cv{cv}.pth')))
+        classifier.to(device)
+        classifier.eval()
+
+        # Load the data
+        X, y = load_seer(random_seed=random_seed+cv)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=random_seed + cv,
+                                                            stratify=y)
+        train_data = ProstateCancerDataset(X_train, y_train)
+        test_data = ProstateCancerDataset(X_test, y_test)
+
+        corpus_loader = DataLoader(train_data, batch_size=corpus_sizes[-1], shuffle=True)
+        test_loader = DataLoader(test_data, batch_size=test_size, shuffle=True)
+
+        Corpus_inputs, _ = next(iter(corpus_loader))
+        test_inputs, _ = next(iter(test_loader))
+        test_latents = classifier.latent_representation(test_inputs.to(device)).detach()
+
+        for id_size, corpus_size in enumerate(corpus_sizes):
+            print(f'Now fitting a corpus of size {corpus_size}.')
+            corpus_inputs = Corpus_inputs[torch.randperm(corpus_size)].to(device)  # Extract a smaller corpus
+            corpus_latents = classifier.latent_representation(corpus_inputs).detach()
+            simplex = Simplex(corpus_inputs, corpus_latents)
+            simplex.fit(test_inputs, test_latents, reg_factor=0)
+            residuals[id_size, cv] = torch.mean(torch.sqrt(torch.sum((simplex.latent_approx()-test_latents)**2,
+                                                                     dim=-1))).cpu()
+
+    print(residuals.mean(dim=-1))
+    print(residuals.std(dim=-1))
+
+
+
+
+
+
+
 def main(experiment: str = 'approximation_quality', cv: int = 0):
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv)
@@ -450,4 +507,5 @@ parser.add_argument('-cv', type=int, default=10, help='Cross validation paramete
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    main(args.experiment, args.cv)
+    #main(args.experiment, args.cv)
+    corpus_size_effect()

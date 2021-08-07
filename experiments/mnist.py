@@ -130,7 +130,8 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
 # Train explainers
 def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
                    n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./results/mnist/',
-                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=1000, cv: int = 0):
+                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=1000, cv: int = 0,
+                   train_only=False):
     torch.random.manual_seed(random_seed + cv)
     explainers = []
 
@@ -142,7 +143,7 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
 
     # Load data:
     corpus_loader = load_mnist(corpus_size, train=True)
-    test_loader = load_mnist(test_size, train=False)
+    test_loader = load_mnist(test_size, train=train_only)
     corpus_examples = enumerate(corpus_loader)
     test_examples = enumerate(test_loader)
     batch_id_test, (test_data, test_targets) = next(test_examples)
@@ -220,13 +221,15 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
 
 
 '''
-        ----------------------------
+-----------------------------------------
         Precision experiment
-        ----------------------------
+-----------------------------------------
 '''
 
+
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                          model_reg_factor=0.1, save_path: str = './results/mnist/quality/'):
+                          model_reg_factor=0.1, save_path: str = './results/mnist/quality/',
+                          train_only=False):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
@@ -253,7 +256,8 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     for i, n_keep in enumerate(n_keep_list):
         print(100 * '-' + '\n' + f'Run number {i + 1}/{len(n_keep_list)} . \n' + 100 * '-')
         explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
-                                    n_keep=n_keep, save_path=save_path, explainers_name=explainers_name)
+                                    n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
+                                    train_only=train_only)
         # Print the partial results
         print(100 * '-' + '\n' + 'Results. \n' + 100 * '-')
         for explainer, explainer_name in zip(explainers, explainers_name[:-1]):
@@ -440,9 +444,9 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
 
 
 '''
-        ----------------------------
+---------------------------------------
         Jacobian Projection experiment
-        ----------------------------
+---------------------------------------
 '''
 
 
@@ -526,20 +530,20 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
         test_latent = classifier.latent_representation(test_input).detach().to(device)
         simplex = Simplex(Corpus_inputs, classifier.latent_representation(Corpus_inputs).detach())
         simplex.fit(test_input, test_latent, reg_factor=0)
-        residual = torch.sum((test_latent - simplex.latent_approx()) ** 2)
+        residual = torch.sqrt(torch.sum((test_latent - simplex.latent_approx()) ** 2))
 
         for pert_id, n_pert in enumerate(n_pert_list):
             print(f'Now fitting the JP-corrupted SimplEx with {n_pert} perturbation(s) per image')
             simplex_jp = Simplex(Corpus_inputs_pert_jp[pert_id],
                                  classifier.latent_representation(Corpus_inputs_pert_jp[pert_id]).detach())
             simplex_jp.fit(test_input, test_latent, reg_factor=0)
-            residual_jp = torch.sum((test_latent - simplex_jp.latent_approx())**2)
+            residual_jp = torch.sqrt(torch.sum((test_latent - simplex_jp.latent_approx())**2))
 
             print(f'Now fitting the IG-corrupted SimplEx with {n_pert} perturbation(s) per image')
             simplex_ig = Simplex(Corpus_inputs_pert_ig[pert_id],
                                  classifier.latent_representation(Corpus_inputs_pert_ig[pert_id]).detach())
             simplex_ig.fit(test_input, test_latent, reg_factor=0)
-            residual_ig = torch.sum((test_latent - simplex_ig.latent_approx()) ** 2)
+            residual_ig = torch.sqrt(torch.sum((test_latent - simplex_ig.latent_approx()) ** 2))
             residual_tensor[0, pert_id, test_id] = (residual_jp - residual).cpu()
             residual_tensor[1, pert_id, test_id] = (residual_ig - residual).cpu()
 
@@ -589,6 +593,8 @@ args = parser.parse_args()
 
 if __name__ == '__main__':
     jacobian_projection_check()
+    approximation_quality([2, 5, 10, 20, 50], 0, save_path='./results/mnist/quality/train_only/',
+                          train_only=True)
     #main(args.experiment, args.cv)
 
 '''
