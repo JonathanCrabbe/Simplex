@@ -70,7 +70,7 @@ def load_cutract(random_seed: int = 42):
 
 
 def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = './results/prostate/quality/',
-                          train_model: bool = True):
+                          train_model: bool = True, train_data_only=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed + cv)
 
@@ -84,7 +84,8 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     weight_decay = 1e-5
     corpus_size = 100
     test_size = 100
-    n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
+    #n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
+    n_keep_list = [2, 5, 10, 50]
     reg_factor_init = 0.01
     reg_factor_final = 10.0
     n_epoch_simplex = 10000
@@ -173,7 +174,10 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
 
     explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
     corpus_loader = DataLoader(train_data, batch_size=corpus_size, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=test_size, shuffle=True)
+    if train_data_only:
+        test_loader = DataLoader(train_data, batch_size=test_size, shuffle=True)
+    else:
+        test_loader = DataLoader(test_data, batch_size=test_size, shuffle=True)
     corpus_examples = enumerate(corpus_loader)
     test_examples = enumerate(test_loader)
     batch_id_test, (test_data, test_targets) = next(test_examples)
@@ -507,5 +511,7 @@ parser.add_argument('-cv', type=int, default=10, help='Cross validation paramete
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    #main(args.experiment, args.cv)
-    corpus_size_effect()
+    # main(args.experiment, args.cv)
+    # corpus_size_effect()
+    approximation_quality(args.cv, save_path='./results/prostate/quality/train_only/', train_model=False,
+                          train_data_only=True)

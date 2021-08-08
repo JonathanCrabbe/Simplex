@@ -130,7 +130,7 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
 # Train explainers
 def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
                    n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./results/mnist/',
-                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=1000, cv: int = 0,
+                   random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=100, cv: int = 0,
                    train_only=False):
     torch.random.manual_seed(random_seed + cv)
     explainers = []
@@ -592,9 +592,10 @@ parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    jacobian_projection_check()
-    approximation_quality([2, 5, 10, 20, 50], 0, save_path='./results/mnist/quality/train_only/',
+
+    approximation_quality([2, 5, 10, 20, 50], args.cv, save_path='./results/mnist/quality/train_only/',
                           train_only=True)
+    #jacobian_projection_check()
     #main(args.experiment, args.cv)
 
 '''
