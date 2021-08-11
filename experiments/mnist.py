@@ -581,10 +581,11 @@ def timing_experiment():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(42)
-    n_bins = 100
-    batch_size = 30
-    test_size = 1
-    times = np.zeros((4, test_size))
+    n_bins = 30
+    batch_size = 50
+    test_size = 100
+    CV = 10
+    times = np.zeros((4, CV))
 
     # Load the model
     classifier = MnistClassifier()
@@ -592,65 +593,70 @@ def timing_experiment():
     classifier.to(device)
     classifier.eval()
 
-    # Prepare the corpus and the test set
-    corpus_loader = load_mnist(subset_size=1000, train=True, batch_size=batch_size)
-    test_loader = load_mnist(subset_size=test_size, train=False, batch_size=1, shuffle=False)
-    Corpus_inputs = torch.zeros((1000, 1, 28, 28), device=device)
+    for cv in range(CV):
+        # Prepare the corpus and the test set
+        corpus_loader = load_mnist(subset_size=1000, train=True, batch_size=batch_size)
+        test_loader_single = load_mnist(subset_size=1, train=False, batch_size=1, shuffle=False)
+        test_loader_multiple = load_mnist(subset_size=test_size, train=False, batch_size=test_size, shuffle=False)
+        Corpus_inputs = torch.zeros((1000, 1, 28, 28), device=device)
 
 
-    for test_id, (test_input, _) in enumerate(test_loader):
-        print(25 * '=' + f'Now working with test sample {test_id + 1}/{len(test_loader)}' + 25 * '=')
-        for batch_id, (corpus_inputs, corpus_targets) in enumerate(corpus_loader):
-            print(f'Now working with corpus batch {batch_id + 1}/{len(corpus_loader)}.')
+        for test_id, (test_input, _) in enumerate(test_loader_single):
+            print(25 * '=' + f'Now working with test sample {test_id + 1}/{len(test_loader_single)}' + 25 * '=')
+            test_latent = classifier.latent_representation(test_input.to(device)).detach()
             t1 = time.time()
-            test_input = test_input.to(device)
-            corpus_inputs = corpus_inputs.to(device).requires_grad_()
-            baseline_inputs = -0.4242 * torch.ones(corpus_inputs.shape, device=device)
-            input_shift = corpus_inputs - baseline_inputs
-            test_latent = classifier.latent_representation(test_input).detach()
-            baseline_latents = classifier.latent_representation(baseline_inputs)
-            latent_shift = test_latent - baseline_latents
-            latent_shift_sqrdnorm = torch.sum(latent_shift ** 2, dim=-1, keepdim=True)
-            input_grad = torch.zeros(corpus_inputs.shape, device=corpus_inputs.device)
-            for n in range(1, n_bins + 1):
-                t = n / n_bins
-                inputs = baseline_inputs + t * (corpus_inputs - baseline_inputs)
-                latent_reps = classifier.latent_representation(inputs)
-                latent_reps.backward(gradient=latent_shift / latent_shift_sqrdnorm)
-                input_grad += corpus_inputs.grad
-                corpus_inputs.grad.data.zero_()
-            jacobian_projections = input_shift * input_grad / n_bins
+            for batch_id, (corpus_inputs, corpus_targets) in enumerate(corpus_loader):
+                print(f'Now working with corpus batch {batch_id + 1}/{len(corpus_loader)}.')
+                test_input = test_input.to(device)
+                corpus_inputs = corpus_inputs.to(device).requires_grad_()
+                baseline_inputs = -0.4242 * torch.ones(corpus_inputs.shape, device=device)
+                input_shift = corpus_inputs - baseline_inputs
+                baseline_latents = classifier.latent_representation(baseline_inputs)
+                latent_shift = test_latent - baseline_latents
+                latent_shift_sqrdnorm = torch.sum(latent_shift ** 2, dim=-1, keepdim=True)
+                input_grad = torch.zeros(corpus_inputs.shape, device=corpus_inputs.device)
+                for n in range(1, n_bins + 1):
+                    t = n / n_bins
+                    inputs = baseline_inputs + t * (corpus_inputs - baseline_inputs)
+                    latent_reps = classifier.latent_representation(inputs)
+                    latent_reps.backward(gradient=latent_shift / latent_shift_sqrdnorm)
+                    input_grad += corpus_inputs.grad
+                    corpus_inputs.grad.data.zero_()
+                jacobian_projections = input_shift * input_grad / n_bins
+                lower_id = batch_id * batch_size
+                higher_id = lower_id + batch_size
+                Corpus_inputs[lower_id:higher_id] = corpus_inputs.detach()
             t2 = time.time()
-            lower_id = batch_id * batch_size
-            higher_id = lower_id + batch_size
-            times[2, test_id] = t2 - t1
-            Corpus_inputs[lower_id:higher_id] = corpus_inputs.detach()
+            times[2, cv] = t2 - t1
 
+        for test_id, (test_inputs, _) in enumerate(test_loader_multiple):
+            test_latents = classifier.latent_representation(test_inputs.to(device)).detach()
+            t1 = time.time()
+            Corpus_latents = classifier.latent_representation(Corpus_inputs.to(device)).detach()
+            simplex = Simplex(Corpus_inputs, Corpus_latents)
+            simplex.fit(test_inputs, test_latents, reg_factor=0, n_epoch=1000)
+            simplex.latent_approx()
+            t2 = time.time()
+            times[0, cv] = (t2 - t1)/test_size
+
+            t1 = time.time()
+            Corpus_latents = classifier.latent_representation(Corpus_inputs.to(device)).detach()
+            knn = NearNeighLatent(Corpus_inputs, Corpus_latents)
+            knn.fit(test_inputs, test_latents)
+            knn.latent_approx()
+            t2 = time.time()
+            times[1, cv] = (t2 - t1)/test_size
+
+
+        # Influence Functions
         t1 = time.time()
-        Corpus_latents = classifier.latent_representation(Corpus_inputs).detach()
-        simplex = Simplex(Corpus_inputs, Corpus_latents)
-        simplex.fit(test_input, test_latent, reg_factor=0, n_epoch=500)
-        simplex.latent_approx()
+        ptif.init_logging()
+        config = ptif.get_default_config()
+        config['outdir'] = './results/mnist_toy'
+        config['test_sample_num'] = False
+        ptif.calc_img_wise(config, classifier, corpus_loader, test_loader_single)
         t2 = time.time()
-        times[0, test_id] = t2 - t1
-
-        t1 = time.time()
-        Corpus_latents = classifier.latent_representation(Corpus_inputs).detach()
-        knn = NearNeighLatent(Corpus_inputs, Corpus_latents)
-        knn.fit(test_input, test_latent)
-        knn.latent_approx()
-        t2 = time.time()
-        times[1, test_id] = t2 - t1
-
-    # Influence Functions
-    t1 = time.time()
-    ptif.init_logging()
-    config = ptif.get_default_config()
-    config['outdir'] = './results/mnist_toy'
-    config['test_sample_num'] = False
-    ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
-    t2 = time.time()
-    times[3, :] = (t2 - t1)
+        times[3, cv] = t2 - t1
 
     print(np.mean(times, axis=-1))
     print(np.std(times, axis=-1))
