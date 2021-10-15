@@ -6,9 +6,10 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
+import os
 
-CV = 19
-n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
+CV = 3
+n_keep_list = [2, 5, 10, 50]
 explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 names_dict = {'simplex': 'SimplEx', 'nn_uniform': 'KNN Uniform', 'nn_dist': 'KNN Distance'}
 line_styles = {'simplex': '-', 'nn_uniform': '--', 'nn_dist': ':'}
@@ -20,15 +21,16 @@ plt.rc('text', usetex=True)
 params = {'text.latex.preamble' : r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
 representer_metrics = np.zeros((2, CV+1))
+load_path = os.path.join("experiments", "results", "prostate", "quality")
 
 for cv in range(CV + 1):
     classifier = MortalityPredictor(n_cont=3)
-    classifier.load_state_dict(torch.load(f'model_cv{cv}.pth'))
+    classifier.load_state_dict(torch.load(os.path.join(load_path, f'model_cv{cv}.pth')))
     classifier.to(device)
     classifier.eval()
     for n_keep in n_keep_list:
         for explainer_name in explainer_names:
-            with open(f'{explainer_name}_cv{cv}_n{n_keep}.pkl', 'rb') as f:
+            with open(os.path.join(load_path, f'{explainer_name}_cv{cv}_n{n_keep}.pkl'), 'rb') as f:
                 explainer = pkl.load(f)
             explainer.to(device)
             latent_rep_approx = explainer.latent_approx()
@@ -43,7 +45,7 @@ for cv in range(CV + 1):
                                             'r2_latent': latent_r2_score, 'r2_output': output_r2_score,
                                             'residual_latent': residual_latent, 'residual_output': residual_output},
                                            ignore_index=True)
-    with open(f'representer_cv{cv}.pkl', 'rb') as f:
+    with open(os.path.join(load_path, f'representer_cv{cv}.pkl'), 'rb') as f:
         representer = pkl.load(f)
     representer.to(device)
     latent_rep_true = representer.test_latent_reps
@@ -82,23 +84,23 @@ plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2_{\mathcal{H}}$')
 plt.ylim(top=1.0)
 plt.legend()
-plt.savefig('r2_latent.pdf', bbox_inches='tight')
+plt.savefig(os.path.join(load_path, 'r2_latent.pdf'), bbox_inches='tight')
 plt.figure(2)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2_{\mathcal{Y}}$')
 plt.ylim(top=1.0)
 plt.legend()
-plt.savefig('r2_output.pdf', bbox_inches='tight')
+plt.savefig(os.path.join(load_path, 'r2_output.pdf'), bbox_inches='tight')
 plt.figure(3)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$\| \hat{\boldsymbol{h}} - \boldsymbol{h} \| $')
 plt.legend()
-plt.savefig('residual_latent.pdf', bbox_inches='tight')
+plt.savefig(os.path.join(load_path, 'residual_latent.pdf'), bbox_inches='tight')
 plt.figure(4)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$\| \hat{\boldsymbol{y}} - \boldsymbol{y} \| $')
 plt.legend()
-plt.savefig('residual_output.pdf', bbox_inches='tight')
+plt.savefig(os.path.join(load_path, 'residual_output.pdf'), bbox_inches='tight')
 
 print(f'Representer metrics: r2_output = {representer_metrics[0].mean():.2g} +/- {representer_metrics[0].std():.2g}'
       f' ; residual_output = {representer_metrics[1].mean():.2g} +/- {representer_metrics[1].std():.2g}')

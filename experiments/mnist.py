@@ -65,7 +65,7 @@ def load_emnist(batch_size: int, train: bool):
 # Train model
 def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int = 64, batch_size_test: int = 1000,
                 random_seed: int = 42, learning_rate=0.01, momentum=0.5, log_interval=100, model_reg_factor=0.01,
-                save_path='./results/mnist/', cv: int = 0):
+                save_path='./experiments/results/mnist/', cv: int = 0):
     torch.random.manual_seed(random_seed + cv)
     torch.backends.cudnn.enabled = False
 
@@ -130,7 +130,7 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
 
 # Train explainers
 def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
-                   n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./results/mnist/',
+                   n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./experiments/results/mnist/',
                    random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=100, cv: int = 0,
                    train_only=False):
     torch.random.manual_seed(random_seed + cv)
@@ -229,7 +229,7 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
 
 
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                          model_reg_factor=0.1, save_path: str = './results/mnist/quality/',
+                          model_reg_factor=0.1, save_path: str = './experiments/results/mnist/quality/',
                           train_only=False):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -355,7 +355,7 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
 '''
 
 
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/mnist/outlier/',
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/mnist/outlier/',
                       train: bool = True):
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -665,7 +665,7 @@ def timing_experiment():
 def main(experiment: str, cv: int):
 
     if experiment == 'approximation_quality':
-        approximation_quality(cv=cv, n_keep_list=[n for n in range(2, 51)])
+        approximation_quality(cv=cv, n_keep_list=[3, 5, 10, 20, 50])
     elif experiment == 'outlier':
         outlier_detection(cv)
 
@@ -677,9 +677,11 @@ parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    timing_experiment()
+    main(args.experiment, args.cv)
+
 
     '''
+    timing_experiment()
     approximation_quality([2, 5, 10, 20, 50], args.cv, save_path='./results/mnist/quality/train_only/',
                           train_only=True)
     jacobian_projection_check()

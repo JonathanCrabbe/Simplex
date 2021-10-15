@@ -120,3 +120,4 @@ dmypy.json
 experiments/results/*
 experiments/data/*
 experiments/time_series_toy.py
+data/*

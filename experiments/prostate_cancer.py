@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 import seaborn as sns
 import argparse
 import torch
@@ -69,7 +68,7 @@ def load_cutract(random_seed: int = 42):
     return df[features], df[label]
 
 
-def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = './results/prostate/quality/',
+def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/prostate/quality/',
                           train_model: bool = True, train_data_only=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed + cv)
@@ -94,7 +93,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
 
     if not os.path.exists(save_path):
         print(f'Creating the saving directory {save_path}')
-        os.mkdir(save_path)
+        os.makedirs(save_path)
 
     # Load the data
     X, y = load_seer(random_seed=random_seed + cv)
@@ -262,7 +261,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
 
 
 # Outlier Detection experiment
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './results/prostate/outlier/',
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/prostate/outlier/',
                       train_model: bool = True):
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -424,13 +423,13 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './re
     simplex_latent_approx = simplex.latent_approx()
     simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
     n_inspected = [n for n in range(simplex_residuals.shape[0])]
-    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99) for n in n_inspected]
+    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
     nn_dist_latent_approx = nn_dist.latent_approx()
     nn_dist_residuals = torch.sqrt(((test_latent_reps - nn_dist_latent_approx) ** 2).mean(dim=-1))
-    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
     nn_uniform_latent_approx = nn_uniform.latent_approx()
     nn_uniform_residuals = torch.sqrt(((test_latent_reps - nn_uniform_latent_approx) ** 2).mean(dim=-1))
-    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99) for n in n_inspected]
+    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
     sns.set()
     plt.plot(n_inspected, simplex_n_detected, label='Simplex')
     plt.plot(n_inspected, nn_dist_n_detected, label='7NN Distance')
@@ -493,11 +492,6 @@ def corpus_size_effect(random_seed=42):
     print(residuals.std(dim=-1))
 
 
-
-
-
-
-
 def main(experiment: str = 'approximation_quality', cv: int = 0):
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv)
@@ -511,7 +505,10 @@ parser.add_argument('-cv', type=int, default=10, help='Cross validation paramete
 args = parser.parse_args()
 
 if __name__ == '__main__':
-    # main(args.experiment, args.cv)
-    # corpus_size_effect()
+    main(args.experiment, args.cv)
+
+    """"
+    corpus_size_effect()
     approximation_quality(args.cv, save_path='./results/prostate/quality/train_only/', train_model=False,
                           train_data_only=True)
+    """

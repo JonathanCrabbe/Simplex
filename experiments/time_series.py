@@ -346,8 +346,6 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     plt.show()
 
 
-
-
 def main(experiment: str = 'precision', cv: int = 0):
     if experiment == 'precision':
         ar_precision(cv=cv)
