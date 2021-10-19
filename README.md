@@ -1,4 +1,4 @@
-# Simplex
+# SimplEx
 ## Preliminaries
 Clone the repository and install the required packages by running
 ```shell
