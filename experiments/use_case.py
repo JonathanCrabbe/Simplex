@@ -8,9 +8,9 @@ import seaborn as sns
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from captum.attr._utils.visualization import visualize_image_attr
-from mnist import load_mnist
+from experiments.mnist import load_mnist
 from matplotlib import cm
-from prostate_cancer import load_seer, ProstateCancerDataset, load_cutract
+from experiments.prostate_cancer import load_seer, ProstateCancerDataset, load_cutract
 from models.image_recognition import MnistClassifier
 from models.tabular_data import MortalityPredictor
 from explainers.simplex import Simplex
@@ -135,7 +135,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
         # plt.savefig(os.path.join(save_path, f'corpus_image{i + 1}_id{test_id}'))
 
 
-def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True,
+def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/use_case/', train_model: bool = True,
                       n_keep: int = 3, test_id=12):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
@@ -238,8 +238,6 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     title = f'Predicted Mortality: {predicted_mortality}'
     plot_prostate_patient(test_inputs[0].cpu().numpy(), title)
     plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
-    plt.show()
-
 
     # Generate a SHAP explanation:
     shap_expl = cap.attr.KernelShap(classifier)
@@ -247,17 +245,12 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
     title = 'SHAP Saliency'
     plot_prostate_patient(test_inputs[0].cpu().numpy(), title, shap_attr)
     plt.savefig(os.path.join(save_path, f'shap_test_patient_id{test_id}'))
-    plt.show()
-
-
 
     # Generate a SimplEx explanation:
     simplex = Simplex(corpus_inputs, classifier.latent_representation(corpus_inputs).detach())
     scheduler = ExponentialScheduler(x_init=0.1, x_final=100, n_epoch=20000)
     weights = simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
                           n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
-    # input_baseline = torch.zeros(corpus_inputs.shape, device=device)
-    # input_baseline[:, :3] = torch.mean(corpus_inputs, dim=0, keepdim=True)[:, :3]
     jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
                                                        n_bins=100)
     decomposition, sort_id = simplex.decompose(0, return_id=True)
@@ -270,7 +263,6 @@ def prostate_use_case(random_seed=42, save_path='./results/use_case/prostate/', 
         title = f'Weight: {decomposition[i][0]:.2g} ; True Outcome: {target}'
         plot_prostate_patient(input, title, saliency)
         plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
-        plt.show()
 
 
 def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True):
@@ -431,6 +423,6 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
 
 
 if __name__ == '__main__':
-    # mnist_use_case(train_model=False, test_id=123, n_keep=2)
-    prostate_use_case(train_model=False, test_id=6, n_keep=3)
-    # prostate_two_corpus(train_model=False)
+    #mnist_use_case(train_model=False, test_id=123, n_keep=2)
+    prostate_use_case(train_model=False, test_id=7, n_keep=3)
+    #prostate_two_corpus(train_model=True)
