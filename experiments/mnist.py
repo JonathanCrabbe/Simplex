@@ -1,5 +1,6 @@
 import captum.attr
 import numpy as np
+import pandas as pd
 import torch
 import torchvision
 import torch.optim as optim
@@ -20,11 +21,11 @@ from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
 from torch.utils.data import Dataset
+from pathlib import Path
 from visualization.images import plot_mnist
 
 
 # Load data
-
 class MNISTSubset(Dataset):
     def __init__(self, X, y=None):
         self.X = X
@@ -62,7 +63,6 @@ def load_emnist(batch_size: int, train: bool):
         batch_size=batch_size, shuffle=True)
 
 
-# Train model
 def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int = 64, batch_size_test: int = 1000,
                 random_seed: int = 42, learning_rate=0.01, momentum=0.5, log_interval=100, model_reg_factor=0.01,
                 save_path='./experiments/results/mnist/', cv: int = 0):
@@ -128,7 +128,6 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
     return classifier
 
 
-# Train explainers
 def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
                    n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./experiments/results/mnist/',
                    random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=100, cv: int = 0,
@@ -200,7 +199,6 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
     return explainers
 
 
-# Fit a representer
 def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
     # Fit the representer explainer (this is only makes sense by using the whole corpus)
     corpus_data_path = os.path.join(load_path, f'corpus_data_cv{cv}.pkl')
@@ -219,13 +217,6 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
         print(f'Saving representer decomposition in {explainer_path}.')
         pkl.dump(representer, f)
     return representer
-
-
-'''
------------------------------------------
-        Precision experiment
------------------------------------------
-'''
 
 
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
@@ -279,15 +270,8 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-'''
-        ----------------------------
-        Influence Function experiment
-        ----------------------------
-'''
-
-
 def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                       save_path: str = './results/mnist/influence/', batch_size: int = 20,
+                       save_path: str = './experiments/results/mnist/influence/', batch_size: int = 50,
                        corpus_size: int = 1000, test_size: int = 100):
     print(100 * '-' + '\n' + 'Welcome in the influence function computation for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -346,13 +330,6 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     config['outdir'] = save_path
     config['test_sample_num'] = False
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
-
-
-'''
-        ----------------------------
-        Outlier Detection experiment
-        ----------------------------
-'''
 
 
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/mnist/outlier/',
@@ -444,15 +421,8 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     plt.show()
 
 
-'''
----------------------------------------
-        Jacobian Projection experiment
----------------------------------------
-'''
-
-
-def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobian_projections/',
-                              corpus_size=500, test_size=100, n_bins=100, batch_size=20):
+def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jacobian_corruption/',
+                        corpus_size=500, test_size=500, n_bins=100, batch_size=50, train: bool = True):
     print(100 * '-' + '\n' + 'Welcome in the Jacobian Projection check for MNIST. \n'
                              f'Settings: random_seed = {random_seed} .\n'
           + 100 * '-')
@@ -460,16 +430,23 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     n_pert_list = [1, 5, 10, 50]
-    residual_tensor = torch.zeros(2, len(n_pert_list), test_size)
+    metric_data = []
+    df_columns = ["Method", "N_pert", "Residual Shift"]
+    current_folder = Path.cwd()
 
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
-        print(f'Creating the saving directory {save_path}')
+    if not (current_folder/save_path).exists():
+        print(f'Creating the saving directory {current_folder/save_path}')
         os.makedirs(save_path)
+
+    # Training a model, save it
+    if train:
+        print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+        train_model(device, random_seed=random_seed, cv=0, save_path=save_path, model_reg_factor=0)
 
     # Load the model
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model.pth')))
+    classifier.load_state_dict(torch.load(current_folder/save_path/"model_cv0.pth"))
     classifier.to(device)
     classifier.eval()
 
@@ -482,7 +459,6 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
     ig_explainer = captum.attr.IntegratedGradients(classifier)
     Corpus_inputs_pert_jp = torch.zeros((len(n_pert_list), corpus_size, 1, 28, 28), device=device)
     Corpus_inputs_pert_ig = torch.zeros((len(n_pert_list), corpus_size, 1, 28, 28), device=device)
-
 
     for test_id, (test_input, _) in enumerate(test_loader):
         print(25*'=' + f'Now working with test sample {test_id+1}/{test_size}' + 25*'=')
@@ -545,12 +521,15 @@ def jacobian_projection_check(random_seed=42, save_path='./results/mnist/jacobia
                                  classifier.latent_representation(Corpus_inputs_pert_ig[pert_id]).detach())
             simplex_ig.fit(test_input, test_latent, reg_factor=0)
             residual_ig = torch.sqrt(torch.sum((test_latent - simplex_ig.latent_approx()) ** 2))
-            residual_tensor[0, pert_id, test_id] = (residual_jp - residual).cpu()
-            residual_tensor[1, pert_id, test_id] = (residual_ig - residual).cpu()
+            metric_data.append(["SimplEx", n_pert, (residual_jp - residual).cpu().numpy().item()])
+            metric_data.append(["IG", n_pert, (residual_ig - residual).cpu().numpy().item()])
 
-    q = torch.tensor([.25, .5, .75])
-    print(torch.quantile(residual_tensor[0], q, dim=-1))
-    print(torch.quantile(residual_tensor[1], q, dim=-1))
+    metric_df = pd.DataFrame(metric_data, columns=df_columns)
+    sns.set_palette("colorblind")
+    sns.boxplot(data=metric_df, x="N_pert", y="Residual Shift", hue="Method")
+    plt.xlabel("Number of pixels perturbed")
+    plt.savefig(current_folder/save_path/"box_plot.pdf")
+
 
 
 
@@ -574,6 +553,7 @@ cos_shift_ig = torch.abs(cos_initial - cos_ig).cpu()
    print(metrics_tensor[1].mean(dim=-1))
    print(metrics_tensor[1].std(dim=-1))
 '''
+
 
 def timing_experiment():
     print(100 * '-' + '\n' + 'Welcome in timing experiment for MNIST. \n'
@@ -666,8 +646,10 @@ def main(experiment: str, cv: int):
 
     if experiment == 'approximation_quality':
         approximation_quality(cv=cv, n_keep_list=[3, 5, 10, 20, 50])
-    elif experiment == 'outlier':
+    elif experiment == 'outlier_detection':
         outlier_detection(cv)
+    elif experiment == 'jacobian_corruption':
+        jacobian_corruption(test_size=100, train=False)
 
 
 
