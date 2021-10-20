@@ -68,7 +68,7 @@ def load_cutract(random_seed: int = 42):
     return df[features], df[label]
 
 
-def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/prostate/quality/',
+def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = './experiments/results/prostate/quality/',
                           train_model: bool = True, train_data_only=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed + cv)
@@ -83,10 +83,9 @@ def approximation_quality(cv: int = 0, random_seed: int = 42, save_path: str = '
     weight_decay = 1e-5
     corpus_size = 100
     test_size = 100
-    #n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
     n_keep_list = [2, 5, 10, 50]
     reg_factor_init = 0.01
-    reg_factor_final = 10.0
+    reg_factor_final = 1.0
     n_epoch_simplex = 10000
     learning_rate_simplex = 100
     momentum_simplex = 0.5
@@ -419,32 +418,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     with open(explainer_path, 'wb') as f:
         print(f'Saving nn_uniform decomposition in {explainer_path}.')
         pkl.dump(nn_uniform, f)
-
-    simplex_latent_approx = simplex.latent_approx()
-    simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
-    n_inspected = [n for n in range(simplex_residuals.shape[0])]
-    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
-    nn_dist_latent_approx = nn_dist.latent_approx()
-    nn_dist_residuals = torch.sqrt(((test_latent_reps - nn_dist_latent_approx) ** 2).mean(dim=-1))
-    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
-    nn_uniform_latent_approx = nn_uniform.latent_approx()
-    nn_uniform_residuals = torch.sqrt(((test_latent_reps - nn_uniform_latent_approx) ** 2).mean(dim=-1))
-    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99).cpu().numpy() for n in n_inspected]
-    sns.set()
-    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
-    plt.plot(n_inspected, nn_dist_n_detected, label='7NN Distance')
-    plt.plot(n_inspected, nn_uniform_n_detected, label='7NN Uniform')
-    plt.xlabel('Number of inspected examples')
-    plt.ylabel('Number of outliers detected')
-    plt.legend()
-    plt.show()
-
-
-'''
-----------------------------------------------------
- Study the effect of corpus size on residual
-----------------------------------------------------
-'''
 
 
 def corpus_size_effect(random_seed=42):

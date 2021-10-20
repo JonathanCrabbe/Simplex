@@ -63,9 +63,9 @@ def load_emnist(batch_size: int, train: bool):
         batch_size=batch_size, shuffle=True)
 
 
-def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int = 64, batch_size_test: int = 1000,
+def train_model(save_path: Path, device: torch.device, n_epoch: int = 10, batch_size_train: int = 64, batch_size_test: int = 1000,
                 random_seed: int = 42, learning_rate=0.01, momentum=0.5, log_interval=100, model_reg_factor=0.01,
-                save_path='./experiments/results/mnist/', cv: int = 0):
+                cv: int = 0):
     torch.random.manual_seed(random_seed + cv)
     torch.backends.cudnn.enabled = False
 
@@ -128,8 +128,8 @@ def train_model(device: torch.device, n_epoch: int = 10, batch_size_train: int =
     return classifier
 
 
-def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000, test_size=100,
-                   n_epoch=10000, learning_rate=100.0, momentum=0.5, save_path='./experiments/results/mnist/',
+def fit_explainers(device: torch.device, explainers_name: list, save_path: Path, corpus_size=1000,
+                   test_size=100, n_epoch=10000, learning_rate=100.0, momentum=0.5,
                    random_seed: int = 42, n_keep=5, reg_factor_init=0.1, reg_factor_final=100, cv: int = 0,
                    train_only=False):
     torch.random.manual_seed(random_seed + cv)
@@ -137,7 +137,7 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
 
     # Load model:
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -184,22 +184,22 @@ def fit_explainers(device: torch.device, explainers_name: list, corpus_size=1000
 
     # Save explainers and data:
     for explainer, explainer_name in zip(explainers, explainers_name):
-        explainer_path = os.path.join(save_path, f'{explainer_name}_cv{cv}_n{n_keep}.pkl')
+        explainer_path = save_path/f'{explainer_name}_cv{cv}_n{n_keep}.pkl'
         with open(explainer_path, 'wb') as f:
             print(f'Saving {explainer_name} decomposition in {explainer_path}.')
             pkl.dump(explainer, f)
-    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    corpus_data_path = save_path/f'corpus_data_cv{cv}.pkl'
     with open(corpus_data_path, 'wb') as f:
         print(f'Saving corpus data in {corpus_data_path}.')
         pkl.dump([corpus_latent_reps, corpus_probas, corpus_true_classes], f)
-    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    test_data_path = save_path/f'test_data_cv{cv}.pkl'
     with open(test_data_path, 'wb') as f:
         print(f'Saving test data in {test_data_path}.')
         pkl.dump([test_latent_reps, test_targets], f)
     return explainers
 
 
-def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
+def fit_representer(model_reg_factor, load_path: Path, cv: int = 0):
     # Fit the representer explainer (this is only makes sense by using the whole corpus)
     corpus_data_path = os.path.join(load_path, f'corpus_data_cv{cv}.pkl')
     with open(corpus_data_path, 'rb') as f:
@@ -220,7 +220,7 @@ def fit_representer(model_reg_factor, load_path: str, cv: int = 0):
 
 
 def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                          model_reg_factor=0.1, save_path: str = './experiments/results/mnist/quality/',
+                          model_reg_factor=0.1, save_path: str = 'experiments/results/mnist/quality/',
                           train_only=False):
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -228,25 +228,27 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']
 
+    current_path = Path.cwd()
+    save_path = current_path / save_path
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
     # Training a model, save it
     print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-    train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=model_reg_factor)
+    train_model(device=device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=model_reg_factor)
 
     # Load the model
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
 
     # Fit the explainers
     print(100 * '-' + '\n' + 'Now fitting the explainers. \n' + 100 * '-')
     for i, n_keep in enumerate(n_keep_list):
-        print(100 * '-' + '\n' + f'Run number {i + 1}/{len(n_keep_list)} . \n' + 100 * '-')
+        print(30 * '-' + f'n_keep = {n_keep}' + 30 * '-')
         explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
                                     n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
                                     train_only=train_only)
@@ -332,7 +334,7 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
 
 
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/mnist/outlier/',
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = 'experiments/results/mnist/outlier/',
                       train: bool = True):
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -342,16 +344,17 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
-
+    current_path = Path.cwd()
+    save_path = current_path / save_path
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
     # Training a model, save it
     if train:
         print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-        train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
+        train_model(device=device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
 
     # Load the model
     classifier = MnistClassifier()
@@ -383,7 +386,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
                           test_latent_reps=test_latent_reps,
                           n_epoch=n_epoch_simplex, learning_rate=100.0, momentum=0.5,
                           reg_factor=0, n_keep=corpus_features.shape[0])
-    explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
+    explainer_path = save_path/f'simplex_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving simplex decomposition in {explainer_path}.')
         pkl.dump(simplex, f)
@@ -392,33 +395,14 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     nn_dist = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps,
                               weights_type='distance')
     nn_dist.fit(test_features, test_latent_reps, n_keep=K)
-    explainer_path = os.path.join(save_path, f'nn_dist_cv{cv}.pkl')
+    explainer_path = save_path/f'nn_dist_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving nn_dist decomposition in {explainer_path}.')
         pkl.dump(nn_dist, f)
-    explainer_path = os.path.join(save_path, f'nn_uniform_cv{cv}.pkl')
+    explainer_path = save_path/f'nn_uniform_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving nn_uniform decomposition in {explainer_path}.')
         pkl.dump(nn_uniform, f)
-
-    simplex_latent_approx = simplex.latent_approx()
-    simplex_residuals = torch.sqrt(((test_latent_reps - simplex_latent_approx) ** 2).mean(dim=-1))
-    n_inspected = [n for n in range(simplex_residuals.shape[0])]
-    simplex_n_detected = [torch.count_nonzero(torch.topk(simplex_residuals, k=n)[1] > 99) for n in n_inspected]
-    nn_dist_latent_approx = nn_dist.latent_approx()
-    nn_dist_residuals = torch.sqrt(((test_latent_reps - nn_dist_latent_approx) ** 2).mean(dim=-1))
-    nn_dist_n_detected = [torch.count_nonzero(torch.topk(nn_dist_residuals, k=n)[1] > 99) for n in n_inspected]
-    nn_uniform_latent_approx = nn_uniform.latent_approx()
-    nn_uniform_residuals = torch.sqrt(((test_latent_reps - nn_uniform_latent_approx) ** 2).mean(dim=-1))
-    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(nn_uniform_residuals, k=n)[1] > 99) for n in n_inspected]
-    sns.set()
-    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
-    plt.plot(n_inspected, nn_dist_n_detected, label=f'{K}NN Distance')
-    plt.plot(n_inspected, nn_uniform_n_detected, label=f'{K}NN Uniform')
-    plt.xlabel('Number of inspected examples')
-    plt.ylabel('Number of outliers detected')
-    plt.legend()
-    plt.show()
 
 
 def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jacobian_corruption/',
@@ -531,30 +515,6 @@ def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jac
     plt.savefig(current_folder/save_path/"box_plot.pdf")
 
 
-
-
-
-
-'''
-corpus_latents = classifier.latent_representation(corpus_inputs.detach()).detach()
-corpus_latents_pert_jp = classifier.latent_representation(corpus_inputs_pert_jp).detach()
-corpus_latents_pert_ig = classifier.latent_representation(corpus_inputs_pert_ig).detach()
-proj_initial = torch.einsum('bd,bd->b', corpus_latents, test_latent)
-cos_initial = proj_initial/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents**2, dim=-1))
-proj_jp = torch.einsum('bd,bd->b', corpus_latents_pert_jp, test_latent)
-cos_jp = proj_jp/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents_pert_jp**2, dim=-1))
-proj_ig = torch.einsum('bd,bd->b', corpus_latents_pert_ig, test_latent)
-cos_ig = proj_ig/torch.sqrt(torch.sum(test_latent ** 2)*torch.sum(corpus_latents_pert_ig**2, dim=-1))
-cos_shift_jp = torch.abs(cos_initial - cos_jp).cpu()
-cos_shift_ig = torch.abs(cos_initial - cos_ig).cpu()
-
-   print(metrics_tensor[0].mean(dim=-1))
-   print(metrics_tensor[0].std(dim=-1))
-   print(metrics_tensor[1].mean(dim=-1))
-   print(metrics_tensor[1].std(dim=-1))
-'''
-
-
 def timing_experiment():
     print(100 * '-' + '\n' + 'Welcome in timing experiment for MNIST. \n'
           + 100 * '-')
@@ -652,7 +612,6 @@ def main(experiment: str, cv: int):
         jacobian_corruption(test_size=100, train=False)
 
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
 parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
@@ -661,62 +620,3 @@ args = parser.parse_args()
 if __name__ == '__main__':
     main(args.experiment, args.cv)
 
-
-    '''
-    timing_experiment()
-    approximation_quality([2, 5, 10, 20, 50], args.cv, save_path='./results/mnist/quality/train_only/',
-                          train_only=True)
-    jacobian_projection_check()
-    main(args.experiment, args.cv)
-    '''
-
-'''
-
-def approximation_quality_single(cv: int = 0, random_seed: int = 42, n_keep: int = 10, load_model: bool = False,
-                                 model_reg_factor=0.1, save_path: str = './results/mnist/'):
-    print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for MNIST. \n'
-                             f'Settings: random_seed = {random_seed} ; n_keep = {n_keep} ; load_model = {load_model}.\n'
-          + 100 * '-')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    explainers_name = ['corpus', 'nn_uniform', 'nn_dist', 'representer']
-
-    # Create saving directory if inexistent
-    if not os.path.exists(save_path):
-        print(f'Creating the saving directory {save_path}')
-        os.makedirs(save_path)
-
-    # Training a model from scratch
-    if not load_model:
-        print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-        train_model(device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=model_reg_factor)
-
-    # Load the model
-    classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
-    classifier.to(device)
-    classifier.eval()
-
-    # Fit the explainers
-    print(100 * '-' + '\n' + 'Now fitting the explainers. \n' + 100 * '-')
-    explainers = fit_explainers(device=device, random_seed=random_seed, cv=cv, test_size=100, corpus_size=1000,
-                                n_keep=n_keep, save_path=save_path, explainers_name=explainers_name,
-                                model_reg_factor=model_reg_factor)
-
-    # Print the partial results
-    print(100 * '-' + '\n' + 'Results. \n' + 100 * '-')
-    for explainer, explainer_name in zip(explainers, explainers_name):
-        if not explainer_name == 'representer':
-            latent_rep_approx = explainer.latent_approx()
-            latent_rep_true = explainer.test_latent_reps
-            output_approx = classifier.latent_to_presoftmax(latent_rep_approx).detach()
-            output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
-            latent_r2_score = sklearn.metrics.r2_score(latent_rep_true.cpu().numpy(), latent_rep_approx.cpu().numpy())
-        else:
-            latent_rep_true = explainer.test_latent_reps
-            output_true = classifier.latent_to_presoftmax(latent_rep_true).detach()
-            output_approx = explainer.output_approx()
-            latent_r2_score = 0
-        output_r2_score = sklearn.metrics.r2_score(output_true.cpu().numpy(), output_approx.cpu().numpy())
-        print(f'{explainer_name} latent r2: {latent_r2_score:.2g} ; output r2 = {output_r2_score:.2g}.')
-
-'''

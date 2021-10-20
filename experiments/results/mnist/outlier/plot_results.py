@@ -1,11 +1,10 @@
 import torch
 import pickle as pkl
-from models.image_recognition import MnistClassifier
-import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-import sklearn.metrics
+from pathlib import Path
+
 
 CV = 9
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -15,13 +14,16 @@ plt.rcParams.update(params)
 test_size = 200
 metrics = np.zeros((4, test_size, CV + 1))
 n_inspected = [n for n in range(test_size)]
+current_path = Path.cwd()
+load_path = current_path / "experiments/results/mnist/outlier"
+
 
 for cv in range(CV + 1):
-    with open(f'simplex_cv{cv}.pkl', 'rb') as f:
+    with open(load_path/f'simplex_cv{cv}.pkl', 'rb') as f:
         simplex = pkl.load(f)
-    with open(f'nn_dist_cv{cv}.pkl', 'rb') as f:
+    with open(load_path/f'nn_dist_cv{cv}.pkl', 'rb') as f:
         nn_dist = pkl.load(f)
-    with open(f'nn_uniform_cv{cv}.pkl', 'rb') as f:
+    with open(load_path/f'nn_uniform_cv{cv}.pkl', 'rb') as f:
         nn_uniform = pkl.load(f)
     latents_true = simplex.test_latent_reps.to(device)
     simplex_latent_approx = simplex.latent_approx().to(device)
@@ -56,6 +58,7 @@ for cv in range(CV + 1):
 counts_ideal = [n if n < int(test_size/2) else int(test_size/2) for n in range(test_size)]
 sns.set(font_scale=1.5)
 sns.set_style("white")
+sns.set_palette("colorblind")
 plt.plot(n_inspected, metrics[0].mean(axis=-1), label='Simplex')
 plt.fill_between(n_inspected, metrics[0].mean(axis=-1) - metrics[0].std(axis=-1),
                  metrics[0].mean(axis=-1) + metrics[0].std(axis=-1), alpha=0.3)
@@ -68,9 +71,8 @@ plt.fill_between(n_inspected, metrics[2].mean(axis=-1) - metrics[2].std(axis=-1)
 plt.plot(n_inspected, metrics[3].mean(axis=-1), label='Random')
 plt.fill_between(n_inspected, metrics[3].mean(axis=-1) - metrics[3].std(axis=-1),
                  metrics[3].mean(axis=-1) + metrics[3].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, counts_ideal, label='Ideal')
+plt.plot(n_inspected, counts_ideal, label='Maximal')
 plt.xlabel('Number of images inspected')
 plt.ylabel('Number of EMNIST detected')
 plt.legend()
-plt.savefig('outlier.pdf', bbox_inches='tight')
-plt.show()
+plt.savefig(load_path/'outlier.pdf', bbox_inches='tight')

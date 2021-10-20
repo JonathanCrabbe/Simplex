@@ -11,7 +11,12 @@ python -m experiments.mnist -experiment "approximation_quality" -cv 0
 python -m experiments.mnist -experiment "approximation_quality" -cv 1
 python -m experiments.mnist -experiment "approximation_quality" -cv 2
 python -m experiments.mnist -experiment "approximation_quality" -cv 3
-
+python -m experiments.mnist -experiment "approximation_quality" -cv 4
+python -m experiments.mnist -experiment "approximation_quality" -cv 5
+python -m experiments.mnist -experiment "approximation_quality" -cv 6
+python -m experiments.mnist -experiment "approximation_quality" -cv 7
+python -m experiments.mnist -experiment "approximation_quality" -cv 8
+python -m experiments.mnist -experiment "approximation_quality" -cv 9
 ```
 2. Run 
 ```shell
@@ -28,6 +33,12 @@ python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 0
 python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 1
 python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 2
 python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 3
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 4
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 5
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 6
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 7
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 8
+python -m experiments.prostate_cancer -experiment "approximation_quality" -cv 9
 
 ```
 3. Run 
@@ -45,6 +56,13 @@ python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 0
 python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 1
 python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 2
 python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 3
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 4
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 5
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 6
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 7
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 8
+python -m experiments.prostate_cancer -experiment "outlier_detection" -cv 9
+
 
 ```
 3. Run 
