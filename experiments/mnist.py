@@ -273,22 +273,29 @@ def approximation_quality(n_keep_list: list, cv: int = 0, random_seed: int = 42,
 
 
 def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
-                       save_path: str = './experiments/results/mnist/influence/', batch_size: int = 50,
+                       save_path: str = 'experiments/results/mnist/influence/', batch_size: int = 50,
                        corpus_size: int = 1000, test_size: int = 100):
     print(100 * '-' + '\n' + 'Welcome in the influence function computation for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed + cv)
+    current_path = Path.cwd()
+    save_path = current_path/save_path
 
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
+    # Training a model if necessary, save it
+    if not (save_path/f"model_cv{cv}").exists():
+        print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
+        train_model(device=device, random_seed=random_seed, cv=0, save_path=save_path, model_reg_factor=0)
+
     # Load the model
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -299,14 +306,14 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     corpus_latent_reps = classifier.latent_representation(corpus_features).detach()
     scheduler = ExponentialScheduler(0.1, 100, 20000)
 
-    with open(os.path.join(save_path, f'corpus_latent_reps_cv{cv}.pkl'), 'wb') as f:
+    with open(save_path/f'corpus_latent_reps_cv{cv}.pkl', 'wb') as f:
         pkl.dump(corpus_latent_reps.cpu().numpy(), f)
 
     test_latent_reps = np.zeros((test_size, corpus_latent_reps.shape[-1]))
     for batch_id, batch in enumerate(test_loader):
         test_latent_reps[batch_id * len(batch[0]):(batch_id + 1) * len(batch[0]), :] = \
             classifier.latent_representation(batch[0].to(device)).detach().cpu().numpy()
-    with open(os.path.join(save_path, f'test_latent_reps_cv{cv}.pkl'), 'wb') as f:
+    with open(save_path/f'test_latent_reps_cv{cv}.pkl', 'wb') as f:
         pkl.dump(test_latent_reps, f)
 
     print(30*'-' + f'Fitting SimplEx' + 30*'-')
@@ -323,13 +330,14 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
             weights_batch = simplex.weights.cpu().numpy()
             weights[batch_id*len(weights_batch):(batch_id+1)*len(weights_batch), :] = weights_batch
 
-        with open(os.path.join(save_path, f'simplex_weights_cv{cv}_n{n_keep}.pkl'), 'wb') as f:
+        with open(save_path/f'simplex_weights_cv{cv}_n{n_keep}.pkl', 'wb') as f:
             pkl.dump(weights, f)
 
     print(30 * '-' + f'Computing Influence Functions' + 30 * '-')
     ptif.init_logging()
     config = ptif.get_default_config()
     config['outdir'] = save_path
+    config['gpu'] = 1
     config['test_sample_num'] = False
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
 
@@ -426,7 +434,7 @@ def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jac
     # Training a model, save it
     if train:
         print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-        train_model(device, random_seed=random_seed, cv=0, save_path=save_path, model_reg_factor=0)
+        train_model(device=device, random_seed=random_seed, cv=0, save_path=save_path, model_reg_factor=0)
 
     # Load the model
     classifier = MnistClassifier()
