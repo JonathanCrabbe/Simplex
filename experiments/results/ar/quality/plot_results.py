@@ -1,14 +1,14 @@
 import torch
 import pickle as pkl
-from models.time_series_forecasting import TimeSeriesForecaster
 import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
+from pathlib import Path
 
 CV = 4
-k_list = [k for k in range(2,10)] + [k for k in range(10, 51, 5)]
+k_list = [2, 5, 10, 50]
 explainer_names = ['simplex', 'knn_uniform', 'knn_dist']
 names_dict = {'simplex': 'SimplEx', 'knn_uniform': 'KNN Uniform', 'knn_dist': 'KNN Distance'}
 line_styles = {'simplex': '-', 'knn_uniform': '--', 'knn_dist': ':'}
@@ -19,14 +19,14 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble' : r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
-
+load_dir = Path.cwd() / "experiments/results/ar/quality/"
 
 for cv in range(CV + 1):
     for k in k_list:
-        with open(f'true_k{k}_cv{cv}', 'rb') as f:
+        with open(load_dir/f'true_k{k}_cv{cv}.pkl', 'rb') as f:
             latent_true, output_true = pkl.load(f)
         for explainer_name in explainer_names:
-            with open(f'{explainer_name}_k{k}_cv{cv}', 'rb') as f:
+            with open(load_dir/f'{explainer_name}_k{k}_cv{cv}.pkl', 'rb') as f:
                 latent_approx, output_approx = pkl.load(f)
 
             latent_r2 = sklearn.metrics.r2_score(latent_true, latent_approx)
@@ -38,8 +38,9 @@ for cv in range(CV + 1):
                                             'residual_latent': latent_residual, 'residual_output': output_residual},
                                            ignore_index=True)
 
-sns.set(font_scale=1.5)
+sns.set()
 sns.set_style("white")
+sns.set_palette("colorblind")
 mean_df = results_df.groupby(['explainer', 'k']).aggregate('mean').unstack(level=0)
 std_df = results_df.groupby(['explainer', 'k']).aggregate('std').unstack(level=0)
 min_df = results_df.groupby(['explainer', 'k']).aggregate('min').unstack(level=0)
@@ -52,14 +53,6 @@ for m, metric_name in enumerate(metric_names):
     for explainer_name in explainer_names:
         plt.plot(k_list, mean_df[metric_name, explainer_name], line_styles[explainer_name],
                  label=names_dict[explainer_name])
-        '''
-        plt.fill_between(n_keep_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
-                         mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)
-        plt.fill_between(n_keep_list, min_df[metric_name, explainer_name],
-                         max_df[metric_name, explainer_name], alpha=0.2)    
-        plt.fill_between(n_keep_list, q1_df[metric_name, explainer_name],
-                         q3_df[metric_name, explainer_name], alpha=0.2)                                                       
-        '''
         plt.fill_between(k_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
                          mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)
 
@@ -68,29 +61,23 @@ plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2_{\mathcal{H}}$')
 plt.ylim(top=1.0)
 plt.legend()
-plt.savefig('r2_latent.pdf', bbox_inches='tight')
+plt.savefig(load_dir/'r2_latent.pdf', bbox_inches='tight')
 plt.figure(2)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$R^2_{\mathcal{Y}}$')
 plt.ylim(top=1.0)
 plt.legend()
-plt.savefig('r2_output.pdf', bbox_inches='tight')
+plt.savefig(load_dir/'r2_output.pdf', bbox_inches='tight')
 plt.figure(3)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$\| \hat{\boldsymbol{h}} - \boldsymbol{h} \|  $')
 plt.legend()
-plt.savefig('residual_latent.pdf', bbox_inches='tight')
+plt.savefig(load_dir/'residual_latent.pdf', bbox_inches='tight')
 plt.figure(4)
 plt.xlabel(r'$K$')
 plt.ylabel(r'$\| \hat{\boldsymbol{y}} - \boldsymbol{y} \| $')
 plt.legend()
-plt.savefig('residual_output.pdf', bbox_inches='tight')
-
-
-
-
-
-
+plt.savefig(load_dir/'residual_output.pdf', bbox_inches='tight')
 
 
 '''

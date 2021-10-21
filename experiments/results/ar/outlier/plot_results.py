@@ -1,14 +1,11 @@
 import torch
 import pickle as pkl
-from models.tabular_data import MortalityPredictor
-import pandas as pd
-import os
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score
+from pathlib import Path
 
-CV = 9
+CV = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble': r'\usepackage{amsmath}'}
@@ -17,15 +14,16 @@ test_size = 2000
 n_outliers = int(test_size/2)
 metrics = np.zeros((4, test_size, CV + 1))
 n_inspected = [n for n in range(test_size)]
+load_dir = Path.cwd() / "experiments/results/ar/outlier"
 
 for cv in range(CV + 1):
-    with open(f'true_cv{cv}.pkl', 'rb') as f:
+    with open(load_dir/f'true_cv{cv}.pkl', 'rb') as f:
         true_reps = pkl.load(f)
-    with open(f'simplex_cv{cv}.pkl', 'rb') as f:
+    with open(load_dir/f'simplex_cv{cv}.pkl', 'rb') as f:
         simplex_reps = pkl.load(f)
-    with open(f'knn_dist_cv{cv}.pkl', 'rb') as f:
+    with open(load_dir/f'knn_dist_cv{cv}.pkl', 'rb') as f:
         knn_dist_reps = pkl.load(f)
-    with open(f'knn_uniform_cv{cv}.pkl', 'rb') as f:
+    with open(load_dir/f'knn_uniform_cv{cv}.pkl', 'rb') as f:
         knn_uniform_reps = pkl.load(f)
 
     simplex_residuals = torch.from_numpy(((true_reps - simplex_reps) ** 2).mean(axis=-1))
@@ -56,8 +54,9 @@ for cv in range(CV + 1):
 
 
 counts_ideal = [n if n < n_outliers else n_outliers for n in range(test_size)]
-sns.set(font_scale=1.5)
+sns.set()
 sns.set_style("white")
+sns.set_palette("colorblind")
 plt.plot(n_inspected, metrics[0].mean(axis=-1), '-', label='SimplEx')
 plt.fill_between(n_inspected, metrics[0].mean(axis=-1) - metrics[0].std(axis=-1),
                  metrics[0].mean(axis=-1) + metrics[0].std(axis=-1), alpha=0.3)
@@ -74,8 +73,8 @@ plt.plot(n_inspected, counts_ideal, label='Ideal')
 plt.xlabel('Number of time series inspected')
 plt.ylabel('Number of oscillating AR detected')
 plt.legend()
-plt.savefig('outlier.pdf', bbox_inches='tight')
-plt.show()
+plt.savefig(load_dir/'outlier.pdf', bbox_inches='tight')
+
 '''
 plt.plot(n_inspected, metrics[0].mean(axis=-1), label='Simplex')
 plt.fill_between(n_inspected, metrics[0].mean(axis=-1) - metrics[0].std(axis=-1),

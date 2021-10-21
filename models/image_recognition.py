@@ -1,9 +1,9 @@
 import torch.nn as nn
 import torch.nn.functional as F
+from models.base import BlackBox
 
 
-
-class MnistClassifier(nn.Module):
+class MnistClassifier(BlackBox):
     def __init__(self):
         super(MnistClassifier, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
@@ -36,4 +36,3 @@ class MnistClassifier(nn.Module):
 
     def latent_to_presoftmax(self, h):
         return self.fc2(h)
-

@@ -348,7 +348,6 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
                 os.rename(save_path/name, save_path/f'influence_functions_cv{cv}.json')
 
 
-
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = 'experiments/results/mnist/outlier/',
                       train: bool = True):
     torch.random.manual_seed(random_seed + cv)

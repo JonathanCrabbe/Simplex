@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from models.base import BlackBox
 
 
-class TimeSeriesForecaster(nn.Module):
+class TimeSeriesForecaster(BlackBox):
     def __init__(self, input_dim: int = 1, hidden_dim: int = 100, output_dim: int = 1, num_layers: int = 2,
                  batch_size: int = 20):
         super(TimeSeriesForecaster, self).__init__()

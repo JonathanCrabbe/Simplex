@@ -1,12 +1,11 @@
-from statsmodels.tsa.arima_process import arma_generate_sample
-from visualization.time_series import plot_time_series
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 from models.time_series_forecasting import TimeSeriesForecaster
 from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from utils.schedulers import ExponentialScheduler
 from sklearn.metrics import r2_score
+from pathlib import Path
+from torch.utils.data import DataLoader
 import numpy as np
 import torch
 import os
@@ -29,15 +28,6 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
         return self.X[idx], self.y[idx]
 
 
-def generate_arma_old(random_seed: int = 42):
-    ar_coefs = [1, .99]
-    ma_coefs = [.0001, 0]
-    np.random.seed(random_seed)
-    X = arma_generate_sample(ar_coefs, ma_coefs, nsample=(10000, 31))
-    X, Y = X[:, 10:-1], X[:, 11:]
-    return X, Y
-
-
 def generate_ar(ar_coefs: np.ndarray, random_seed: int = 42, length: int = 50, n_samples: int = 10000,
                 variance: float = .1):
     np.random.seed(random_seed)
@@ -45,7 +35,6 @@ def generate_ar(ar_coefs: np.ndarray, random_seed: int = 42, length: int = 50, n
     X = np.zeros((n_samples, length+1))
     X[:, :p] = variance*np.random.randn(n_samples, p)
     Noise = variance*np.random.randn(n_samples, length+1)
-
     # Better initialization
     for t in range(3*p):
         X_p = X[:, :p] @ ar_coefs[::-1] + variance*np.random.randn(n_samples)
@@ -58,7 +47,7 @@ def generate_ar(ar_coefs: np.ndarray, random_seed: int = 42, length: int = 50, n
     return X[:, :-1], X[:, 1:]
 
 
-def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/ar/precision', train=True):
+def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str = 'experiments/results/ar/quality', train=True):
 
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for AR. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -66,10 +55,11 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.manual_seed(random_seed)
-    explainers_name = ['simplex', 'nn_uniform', 'nn_dist', 'representer']
 
-    # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    # Create saving directory if necessary
+    current_path = Path.cwd()
+    save_path = current_path/save_path
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
@@ -79,7 +69,7 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
     corpus_size = 1000
     batch_size_simplex = 100
     n_epoch_simplex = 20000
-    k_list = [k for k in range(2,10)] + [k for k in range(10, 51, 5)]
+    k_list = [2, 5, 10, 50]
 
     X, Y = generate_ar(ar_coefs, random_seed + cv, length, n_samples)
     X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.1, random_state=random_seed + cv)
@@ -93,17 +83,10 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
     Y_test = torch.from_numpy(Y_test).float().to(device)
     training_set = TimeSeriesDataset(X_train, Y_train)
     test_set = TimeSeriesDataset(X_test, Y_test)
-    train_loader = torch.utils.data.DataLoader(training_set, batch_size=20, shuffle=True)
-
+    train_loader = DataLoader(training_set, batch_size=100, shuffle=True)
     model = TimeSeriesForecaster().to(device)
     opt = torch.optim.Adam(params=model.parameters())
 
-    '''
-    model.hidden = model.init_hidden(batch_size=1)
-    plt.plot(np.arange(length), Y_test[2].detach().cpu().numpy())
-    plt.plot(np.arange(length), model(X_test[2:3])[0].detach().cpu().numpy())
-    plt.show()
-    '''
     if train:
         model.hidden = model.init_hidden(batch_size=len(X_test))
         print(f'Initial Test MSE: {torch.mean((Y_test - model(X_test)) ** 2):.3g}')
@@ -121,28 +104,20 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
             if (epoch+1) % 5 == 0:
                 model.hidden = model.init_hidden(batch_size=len(X_test))
                 print(f'Epoch {epoch + 1}: Test MSE = {torch.mean((Y_test - model(X_test)) ** 2):.3g}.')
-        model_path = os.path.join(save_path, f'model_cv{cv}.pth')
+        model_path = save_path/f'model_cv{cv}.pth'
         print(f'Saving the model in {model_path}.')
         torch.save(model.state_dict(), model_path)
 
     model = TimeSeriesForecaster()
-    model.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    model.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     model.to(device)
-
-    '''
-    model.hidden = model.init_hidden(batch_size=1)
-    plt.plot(np.arange(length), Y_test[2].detach().cpu().numpy())
-    plt.plot(np.arange(length), model(X_test[2:3])[0].detach().cpu().numpy())
-    plt.show()
-    '''
-    corpus_loader = torch.utils.data.DataLoader(training_set, batch_size=corpus_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=batch_size_simplex)
+    corpus_loader = DataLoader(training_set, batch_size=corpus_size, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=batch_size_simplex)
     X_corpus, _ = next(iter(corpus_loader))
     X_corpus = X_corpus.to(device)
     model.hidden = model.init_hidden(len(X_corpus))
     latent_corpus = model.latent_representation(X_corpus).detach()
     reg_scheduler = ExponentialScheduler(1.0e-5, 1.0e-3, n_epoch_simplex)
-
     simplex = Simplex(X_corpus, latent_corpus)
     knn_uniform = NearNeighLatent(X_corpus, latent_corpus)
     knn_dist = NearNeighLatent(X_corpus, latent_corpus, weights_type='distance')
@@ -190,17 +165,17 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str='./results/a
         print(f'KNN Distance: R2 Latent = {r2_score(latent_true, latent_knn_dist):.3g} ; '
               f'R2 Output = {r2_score(output_true, output_knn_dist):.3g}')
         print(f'Saving the results in {save_path}.')
-        with open(os.path.join(save_path, f'true_k{k}_cv{cv}.pkl'), 'wb') as f:
+        with open(save_path/f'true_k{k}_cv{cv}.pkl', 'wb') as f:
             pkl.dump((latent_true, output_true), f)
-        with open(os.path.join(save_path, f'simplex_k{k}_cv{cv}.pkl'), 'wb') as f:
+        with open(save_path/f'simplex_k{k}_cv{cv}.pkl', 'wb') as f:
             pkl.dump((latent_simplex, output_simplex), f)
-        with open(os.path.join(save_path, f'knn_uniform_k{k}_cv{cv}.pkl'), 'wb') as f:
+        with open(save_path/f'knn_uniform_k{k}_cv{cv}.pkl', 'wb') as f:
             pkl.dump((latent_knn_uniform, output_knn_uniform), f)
-        with open(os.path.join(save_path, f'knn_dist_k{k}_cv{cv}.pkl'), 'wb') as f:
+        with open(save_path/f'knn_dist_k{k}_cv{cv}.pkl', 'wb') as f:
             pkl.dump((latent_knn_dist, output_knn_dist), f)
 
 
-def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./results/ar/outlier', train=True):
+def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str = 'experiments/results/ar/outlier', train=True):
 
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for AR. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -210,7 +185,9 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     torch.manual_seed(random_seed)
 
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    current_path = Path.cwd()
+    save_path = current_path / save_path
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
@@ -235,7 +212,7 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     Y_test = torch.from_numpy(Y_test).float().to(device)
     training_set = TimeSeriesDataset(X_train, Y_train)
     test_set = TimeSeriesDataset(X_test, Y_test)
-    train_loader = torch.utils.data.DataLoader(training_set, batch_size=20, shuffle=True)
+    train_loader = DataLoader(training_set, batch_size=20, shuffle=True)
 
     model = TimeSeriesForecaster().to(device)
     opt = torch.optim.Adam(params=model.parameters())
@@ -257,30 +234,28 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
             if (epoch+1) % 5 == 0:
                 model.hidden = model.init_hidden(batch_size=len(X_test))
                 print(f'Epoch {epoch + 1}: Test MSE = {torch.mean((Y_test - model(X_test)) ** 2):.3g}.')
-        model_path = os.path.join(save_path, f'model_cv{cv}.pth')
+        model_path = save_path/f'model_cv{cv}.pth'
         print(f'Saving the model in {model_path}.')
         torch.save(model.state_dict(), model_path)
 
     model = TimeSeriesForecaster()
-    model.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    model.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     model.to(device)
 
-    corpus_loader = torch.utils.data.DataLoader(training_set, batch_size=corpus_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=int(batch_size_simplex/2))
+    corpus_loader = DataLoader(training_set, batch_size=corpus_size, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=int(batch_size_simplex/2))
     n_outlier = len(X_test)
     X_outlier, Y_outlier = generate_ar(outlier_ar_coefs, random_seed + cv, length, n_outlier)
     X_outlier = torch.from_numpy(X_outlier).float().to(device).reshape(len(X_outlier), -1, 1)
     outlier_set = TimeSeriesDataset(X_outlier, Y_outlier)
-    outlier_loader = torch.utils.data.DataLoader(outlier_set, batch_size=int(batch_size_simplex/2))
+    outlier_loader = DataLoader(outlier_set, batch_size=int(batch_size_simplex/2))
     X_corpus, _ = next(iter(corpus_loader))
     X_corpus = X_corpus.to(device)
     model.hidden = model.init_hidden(len(X_corpus))
     latent_corpus = model.latent_representation(X_corpus).detach()
-
     simplex = Simplex(X_corpus, latent_corpus)
     knn_uniform = NearNeighLatent(X_corpus, latent_corpus)
     knn_dist = NearNeighLatent(X_corpus, latent_corpus, weights_type='distance')
-
     latent_true = np.zeros((len(X_test), model.hidden_dim))
     latent_simplex = np.zeros((len(X_test), model.hidden_dim))
     latent_knn_uniform = np.zeros((len(X_test), model.hidden_dim))
@@ -290,11 +265,9 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     outlier_latent_knn_uniform = np.zeros((len(X_outlier), model.hidden_dim))
     outlier_latent_knn_dist = np.zeros((len(X_outlier), model.hidden_dim))
 
-
     for n_batch, ((x_test, _), (x_outlier, _)) in enumerate(zip(test_loader, outlier_loader)):
         print(20 * '-' + f'Now working with batch {n_batch+1} /'
                          f' {int((len(X_outlier)+len(X_test))/batch_size_simplex)}' + 20 * '-')
-
         x_merge = torch.cat((x_test, x_outlier))
         x_merge = x_merge.to(device)
         model.hidden = model.init_hidden(len(x_merge))
@@ -312,26 +285,25 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
         latent_knn_dist[id_init:id_end, :] = knn_dist.latent_approx().cpu().numpy()[:half_batch_size]
         outlier_latent_knn_dist[id_init:id_end, :] = simplex.latent_approx().cpu().numpy()[half_batch_size:]
 
-
     all_latent_true = np.concatenate((latent_true, outlier_latent_true))
     all_latent_simplex = np.concatenate((latent_simplex, outlier_latent_simplex))
     all_latent_knn_uniform = np.concatenate((latent_knn_uniform, outlier_latent_knn_uniform))
     all_latent_knn_dist = np.concatenate((latent_knn_dist, outlier_latent_knn_dist))
+
+    print(f'Saving results in {save_path}.')
+    with open(save_path/f'simplex_cv{cv}.pkl', 'wb') as f:
+        pkl.dump(all_latent_simplex, f)
+    with open(save_path/f'true_cv{cv}.pkl', 'wb') as f:
+        pkl.dump(all_latent_true, f)
+    with open(save_path/f'knn_uniform_cv{cv}.pkl', 'wb') as f:
+        pkl.dump(all_latent_knn_uniform, f)
+    with open(save_path/f'knn_dist_cv{cv}.pkl', 'wb') as f:
+        pkl.dump(all_latent_knn_dist, f)
+
+    '''
     residuals_simplex = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_simplex)**2).sum(axis=-1)))
     residuals_knn_uniform = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_uniform) ** 2).sum(axis=-1)))
     residuals_knn_dist = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_dist) ** 2).sum(axis=-1)))
-
-    print(f'Saving results in {save_path}.')
-    with open(os.path.join(save_path, f'simplex_cv{cv}.pkl'), 'wb') as f:
-        pkl.dump(all_latent_simplex, f)
-    with open(os.path.join(save_path, f'true_cv{cv}.pkl'), 'wb') as f:
-        pkl.dump(all_latent_true, f)
-    with open(os.path.join(save_path, f'knn_uniform_cv{cv}.pkl'), 'wb') as f:
-        pkl.dump(all_latent_knn_uniform, f)
-    with open(os.path.join(save_path, f'knn_dist_cv{cv}.pkl'), 'wb') as f:
-        pkl.dump(all_latent_knn_dist, f)
-
-
     n_inspected = [n for n in range(1, len(residuals_simplex))]
     simplex_n_detected = [torch.count_nonzero(torch.topk(residuals_simplex, k=n)[1] > n_outlier-1) for n in n_inspected]
     nn_dist_n_detected = [torch.count_nonzero(torch.topk(residuals_knn_dist, k=n)[1] > n_outlier-1) for n in n_inspected]
@@ -344,12 +316,13 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str='./resu
     plt.ylabel('Number of outliers detected')
     plt.legend()
     plt.show()
+    '''
 
 
-def main(experiment: str = 'precision', cv: int = 0):
-    if experiment == 'precision':
+def main(experiment: str = 'approximation_quality', cv: int = 0):
+    if experiment == 'approximation_quality':
         ar_precision(cv=cv)
-    elif experiment == 'outlier':
+    elif experiment == 'outlier_detection':
         outlier_detection(cv=cv)
 
 
