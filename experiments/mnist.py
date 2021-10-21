@@ -278,7 +278,7 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(100 * '-' + '\n' + 'Welcome in the influence function computation for MNIST. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
           + 100 * '-')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     torch.random.manual_seed(random_seed + cv)
     current_path = Path.cwd()
     save_path = current_path/save_path
@@ -289,9 +289,9 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
         os.makedirs(save_path)
 
     # Training a model if necessary, save it
-    if not (save_path/f"model_cv{cv}").exists():
+    if not (save_path/f"model_cv{cv}.pth").exists():
         print(100 * '-' + '\n' + 'Now fitting the model. \n' + 100 * '-')
-        train_model(device=device, random_seed=random_seed, cv=0, save_path=save_path, model_reg_factor=0)
+        train_model(device=device, random_seed=random_seed, cv=cv, save_path=save_path, model_reg_factor=0)
 
     # Load the model
     classifier = MnistClassifier()
@@ -300,7 +300,7 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     classifier.eval()
 
     corpus_loader = load_mnist(subset_size=corpus_size, train=True, batch_size=corpus_size)
-    test_loader = load_mnist(subset_size=100, train=False, batch_size=20, shuffle=False)
+    test_loader = load_mnist(subset_size=test_size, train=False, batch_size=50, shuffle=False)
 
     corpus_features = next(iter(corpus_loader))[0].to(device)
     corpus_latent_reps = classifier.latent_representation(corpus_features).detach()
@@ -321,7 +321,7 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
         print(20*'-' + f'Training Simplex by allowing to keep {n_keep} corpus examples' + 20*'-')
         weights = np.zeros((test_size, corpus_size))
         for batch_id, batch in enumerate(test_loader):
-            print(20 * '-' + f'Working with batch {batch_id+1} / {math.ceil(test_size/batch_size)}' + 20 * '-')
+            print(20 * '-' + f'Working with batch {batch_id+1} / {len(test_loader)}' + 20 * '-')
             simplex = Simplex(corpus_features, corpus_latent_reps)
             test_features = batch[0].to(device)
             test_latent_reps = classifier.latent_representation(test_features).detach()
@@ -336,10 +336,17 @@ def influence_function(n_keep_list: list, cv: int = 0, random_seed: int = 42,
     print(30 * '-' + f'Computing Influence Functions' + 30 * '-')
     ptif.init_logging()
     config = ptif.get_default_config()
-    config['outdir'] = save_path
-    config['gpu'] = 1
+    config['outdir'] = str(save_path)
     config['test_sample_num'] = False
     ptif.calc_img_wise(config, classifier, corpus_loader, test_loader)
+    # Delete temporary files, rename the result file
+    for root, dirs, files in os.walk(save_path):
+        for name in files:
+            if "influence_results_tmp" in name or "influences_results_meta_0" in name:
+                os.remove(save_path/name)
+            elif name == "influence_results_0_False.json":
+                os.rename(save_path/name, save_path/f'influence_functions_cv{cv}.json')
+
 
 
 def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = 'experiments/results/mnist/outlier/',
@@ -618,6 +625,12 @@ def main(experiment: str, cv: int):
         outlier_detection(cv)
     elif experiment == 'jacobian_corruption':
         jacobian_corruption(test_size=100, train=False)
+    elif experiment == 'influence':
+        influence_function(n_keep_list=[2, 5, 10, 20, 50], cv=cv)
+    else:
+        raise ValueError("The name of the experiment is not valid. "
+                         "Valid names are: "
+                         "approximation_quality , outlier_detection , jacobian_corruption, influence.")
 
 
 parser = argparse.ArgumentParser()

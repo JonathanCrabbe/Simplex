@@ -1,6 +1,4 @@
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 import argparse
 import torch
 import sklearn
@@ -16,6 +14,7 @@ from explainers.simplex import Simplex
 from explainers.nearest_neighbours import NearNeighLatent
 from explainers.representer import Representer
 from utils.schedulers import ExponentialScheduler
+from pathlib import Path
 
 
 class ProstateCancerDataset(Dataset):
@@ -68,7 +67,7 @@ def load_cutract(random_seed: int = 42):
     return df[features], df[label]
 
 
-def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = './experiments/results/prostate/quality/',
+def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = 'experiments/results/prostate/quality/',
                           train_model: bool = True, train_data_only=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed + cv)
@@ -90,7 +89,9 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
     learning_rate_simplex = 100
     momentum_simplex = 0.5
 
-    if not os.path.exists(save_path):
+    current_path = Path.cwd()
+    save_path = current_path/save_path
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
@@ -133,8 +134,8 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
                     train_losses.append(loss.item())
                     train_counter.append(
                         (batch_idx * 128) + ((epoch - 1) * len(train_loader.dataset)))
-                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
-                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+                    torch.save(classifier.state_dict(), save_path/f'model_cv{cv}.pth')
+                    torch.save(optimizer.state_dict(), save_path/f'optimizer_cv{cv}.pth')
 
         def test():
             classifier.eval()
@@ -158,12 +159,12 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
         for epoch in range(1, n_epoch_model + 1):
             train(epoch)
             test()
-        torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
-        torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+        torch.save(classifier.state_dict(), save_path/f'model_cv{cv}.pth')
+        torch.save(optimizer.state_dict(), save_path/f'optimizer_cv{cv}.pth')
 
     # Load model:
     classifier = MortalityPredictor(n_cont=3)
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -189,11 +190,11 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
     test_latent_reps = classifier.latent_representation(test_data).detach()
 
     # Save data:
-    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    corpus_data_path = save_path/f'corpus_data_cv{cv}.pkl'
     with open(corpus_data_path, 'wb') as f:
         print(f'Saving corpus data in {corpus_data_path}.')
         pkl.dump([corpus_latent_reps, corpus_probas, corpus_true_classes], f)
-    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    test_data_path = save_path/f'test_data_cv{cv}.pkl'
     with open(test_data_path, 'wb') as f:
         print(f'Saving test data in {test_data_path}.')
         pkl.dump([test_latent_reps, test_targets], f)
@@ -230,7 +231,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
 
         # Save explainers:
         for explainer, explainer_name in zip(explainers, explainer_names):
-            explainer_path = os.path.join(save_path, f'{explainer_name}_cv{cv}_n{n_keep}.pkl')
+            explainer_path = save_path/f'{explainer_name}_cv{cv}_n{n_keep}.pkl'
             with open(explainer_path, 'wb') as f:
                 print(f'Saving {explainer_name} decomposition in {explainer_path}.')
                 pkl.dump(explainer, f)
@@ -248,7 +249,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
                               corpus_true_classes=corpus_true_classes,
                               reg_factor=weight_decay)
     representer.fit(test_latent_reps=test_latent_reps)
-    explainer_path = os.path.join(save_path, f'representer_cv{cv}.pkl')
+    explainer_path = save_path/f'representer_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving representer decomposition in {explainer_path}.')
         pkl.dump(representer, f)
@@ -259,8 +260,7 @@ def approximation_quality(cv: int = 0, random_seed: int = 55, save_path: str = '
     print(f'representer output r2 = {output_r2_score:.2g}.')
 
 
-# Outlier Detection experiment
-def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './experiments/results/prostate/outlier/',
+def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = 'experiments/results/prostate/outlier/',
                       train_model: bool = True):
     torch.random.manual_seed(random_seed + cv)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -269,7 +269,9 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
           + 100 * '-')
 
     # Create saving directory if inexistent
-    if not os.path.exists(save_path):
+    current_path = Path.cwd()
+    save_path = current_path / save_path
+    if not save_path.exists():
         print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
@@ -279,9 +281,6 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     weight_decay = 1e-5
     corpus_size = 100
     test_size = 100
-    n_keep_list = [n for n in range(2, 10)] + [n for n in range(10, 55, 5)]
-    reg_factor_init = 0.01
-    reg_factor_final = 10.0
     n_epoch_simplex = 10000
 
     # Training a model, save it
@@ -327,8 +326,8 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
                     train_losses.append(loss.item())
                     train_counter.append(
                         (batch_idx * 128) + ((epoch - 1) * len(train_loader.dataset)))
-                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
-                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+                    torch.save(classifier.state_dict(), save_path/f'model_cv{cv}.pth')
+                    torch.save(optimizer.state_dict(), save_path/f'optimizer_cv{cv}.pth')
 
         def test():
             classifier.eval()
@@ -352,12 +351,12 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
         for epoch in range(1, n_epoch_model + 1):
             train(epoch)
             test()
-        torch.save(classifier.state_dict(), os.path.join(save_path, f'model_cv{cv}.pth'))
-        torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer_cv{cv}.pth'))
+        torch.save(classifier.state_dict(), save_path/f'model_cv{cv}.pth')
+        torch.save(optimizer.state_dict(), save_path/f'optimizer_cv{cv}.pth')
 
     # Load model:
     classifier = MortalityPredictor(n_cont=3)
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model_cv{cv}.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -385,11 +384,11 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     test_latent_reps = classifier.latent_representation(test_features).detach()
 
     # Save data:
-    corpus_data_path = os.path.join(save_path, f'corpus_data_cv{cv}.pkl')
+    corpus_data_path = save_path/f'corpus_data_cv{cv}.pkl'
     with open(corpus_data_path, 'wb') as f:
         print(f'Saving corpus data in {corpus_data_path}.')
         pkl.dump([corpus_latent_reps, corpus_probas, corpus_true_classes], f)
-    test_data_path = os.path.join(save_path, f'test_data_cv{cv}.pkl')
+    test_data_path = save_path/f'test_data_cv{cv}.pkl'
     with open(test_data_path, 'wb') as f:
         print(f'Saving test data in {test_data_path}.')
         pkl.dump([test_latent_reps, test_targets], f)
@@ -400,7 +399,7 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     weights = simplex.fit(test_examples=test_features,
                           test_latent_reps=test_latent_reps,
                           n_epoch=n_epoch_simplex, reg_factor=0, n_keep=corpus_features.shape[0])
-    explainer_path = os.path.join(save_path, f'simplex_cv{cv}.pkl')
+    explainer_path = save_path/f'simplex_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving simplex decomposition in {explainer_path}.')
         pkl.dump(simplex, f)
@@ -410,11 +409,11 @@ def outlier_detection(cv: int = 0, random_seed: int = 42, save_path: str = './ex
     nn_dist = NearNeighLatent(corpus_examples=corpus_features, corpus_latent_reps=corpus_latent_reps,
                               weights_type='distance')
     nn_dist.fit(test_features, test_latent_reps, n_keep=7)
-    explainer_path = os.path.join(save_path, f'nn_dist_cv{cv}.pkl')
+    explainer_path = save_path/f'nn_dist_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving nn_dist decomposition in {explainer_path}.')
         pkl.dump(nn_dist, f)
-    explainer_path = os.path.join(save_path, f'nn_uniform_cv{cv}.pkl')
+    explainer_path = save_path/f'nn_uniform_cv{cv}.pkl'
     with open(explainer_path, 'wb') as f:
         print(f'Saving nn_uniform decomposition in {explainer_path}.')
         pkl.dump(nn_uniform, f)
@@ -430,11 +429,12 @@ def corpus_size_effect(random_seed=42):
     corpus_sizes = [50, 100, 500, 1000]
     test_size = 100
     residuals = torch.zeros(len(corpus_sizes), 4)
+    current_directory = Path.cwd()
     for cv in range(4):
         print(25*'=' + f'Now working with cv = {cv}.' + 25*'=')
         # Load model:
         classifier = MortalityPredictor(n_cont=3)
-        classifier.load_state_dict(torch.load(os.path.join('./results/prostate/quality', f'model_cv{cv}.pth')))
+        classifier.load_state_dict(torch.load(current_directory/"results/prostate/quality"/f'model_cv{cv}.pth'))
         classifier.to(device)
         classifier.eval()
 
@@ -470,18 +470,17 @@ def main(experiment: str = 'approximation_quality', cv: int = 0):
         approximation_quality(cv=cv)
     elif experiment == 'outlier_detection':
         outlier_detection(cv=cv)
+    elif experiment == 'corpus_size':
+        corpus_size_effect()
+    else:
+        raise ValueError("The name of the experiment is not valid. "
+                         "Valid names are: approximation_quality , outlier_detection , corpus_size.  ")
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-experiment', type=str, default='outlier_detection', help='Experiment to perform')
-parser.add_argument('-cv', type=int, default=10, help='Cross validation parameter')
+parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
 args = parser.parse_args()
 
 if __name__ == '__main__':
     main(args.experiment, args.cv)
-
-    """"
-    corpus_size_effect()
-    approximation_quality(args.cv, save_path='./results/prostate/quality/train_only/', train_model=False,
-                          train_data_only=True)
-    """
