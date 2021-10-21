@@ -78,17 +78,3 @@ plt.xlabel(r'$K$')
 plt.ylabel(r'$\| \hat{\boldsymbol{y}} - \boldsymbol{y} \| $')
 plt.legend()
 plt.savefig(load_dir/'residual_output.pdf', bbox_inches='tight')
-
-
-'''
-for explainer_name, group in results_df.groupby('explainer'):
-    mean_aggregation = {'r2_latent': 'mean', 'r2_output': 'mean',
-                        'residual_latent': 'mean', 'residual_output': 'mean'}
-    print(results_df.groupby('n_keep').aggregate('mean'))
-    plt.plot(group['n_keep'], group['r2_latent'], label=f'{explainer_name} (latent)', linestyle='-')
-    plt.plot(group['n_keep'], group['r2_output'], label=f'{explainer_name} (output)', linestyle=':')
-    plt.ylabel('R2')
-    plt.xlabel('Number of corpus samples')
-    plt.legend()
-plt.show()
-'''

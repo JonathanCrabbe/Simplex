@@ -69,49 +69,8 @@ plt.fill_between(n_inspected, metrics[2].mean(axis=-1) - metrics[2].std(axis=-1)
 plt.plot(n_inspected, metrics[3].mean(axis=-1), '-.', label='Random')
 plt.fill_between(n_inspected, metrics[3].mean(axis=-1) - metrics[3].std(axis=-1),
                  metrics[3].mean(axis=-1) + metrics[3].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, counts_ideal, label='Ideal')
+plt.plot(n_inspected, counts_ideal, label='Maximal')
 plt.xlabel('Number of time series inspected')
 plt.ylabel('Number of oscillating AR detected')
 plt.legend()
 plt.savefig(load_dir/'outlier.pdf', bbox_inches='tight')
-
-'''
-plt.plot(n_inspected, metrics[0].mean(axis=-1), label='Simplex')
-plt.fill_between(n_inspected, metrics[0].mean(axis=-1) - metrics[0].std(axis=-1),
-                 metrics[0].mean(axis=-1) + metrics[0].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, metrics[1].mean(axis=-1), label='7NN Distance')
-plt.fill_between(n_inspected, metrics[1].mean(axis=-1) - metrics[1].std(axis=-1),
-                 metrics[1].mean(axis=-1) + metrics[1].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, metrics[2].mean(axis=-1), label='7NN Uniform')
-plt.fill_between(n_inspected, metrics[2].mean(axis=-1) - metrics[2].std(axis=-1),
-                 metrics[2].mean(axis=-1) + metrics[2].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, metrics[3].mean(axis=-1), label='Random')
-plt.fill_between(n_inspected, metrics[3].mean(axis=-1) - metrics[3].std(axis=-1),
-                 metrics[3].mean(axis=-1) + metrics[3].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, counts_ideal, label='Ideal')
-plt.xlabel('Number of examples inspected')
-plt.ylabel('Number of outliers detected')
-plt.legend()
-plt.savefig('outlier.pdf', bbox_inches='tight')
-plt.show()
-
--------------------------------------------------------------------
-
-
-plt.plot(n_inspected, accuracies[0].mean(axis=-1), label='Simplex')
-plt.fill_between(n_inspected, accuracies[0].mean(axis=-1) - accuracies[0].std(axis=-1),
-                 accuracies[0].mean(axis=-1) + accuracies[0].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, accuracies[1].mean(axis=-1), label='7NN Distance')
-plt.fill_between(n_inspected, accuracies[1].mean(axis=-1) - accuracies[1].std(axis=-1),
-                 accuracies[1].mean(axis=-1) + accuracies[1].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, accuracies[2].mean(axis=-1), label='7NN Uniform')
-plt.fill_between(n_inspected, accuracies[2].mean(axis=-1) - accuracies[2].std(axis=-1),
-                 accuracies[2].mean(axis=-1) + accuracies[2].std(axis=-1), alpha=0.3)
-plt.plot(n_inspected, accuracies[3].mean(axis=-1), label='Random')
-plt.fill_between(n_inspected, accuracies[3].mean(axis=-1) - accuracies[3].std(axis=-1),
-                 accuracies[3].mean(axis=-1) + accuracies[3].std(axis=-1), alpha=0.3)
-plt.xlabel('Number of examples deleted')
-plt.ylabel('Accuracy')
-plt.legend()
-
-'''
