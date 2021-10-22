@@ -4,21 +4,26 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import argparse
 
 
-CV = 9
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+", required=True, default=[0, 1, 2, 3, 4],
+                    help="The list of experiment cv identifiers to plot", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble': r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
 test_size = 200
-metrics = np.zeros((4, test_size, CV + 1))
+metrics = np.zeros((4, test_size, len(cv_list)))
 n_inspected = [n for n in range(test_size)]
 current_path = Path.cwd()
 load_path = current_path / "experiments/results/mnist/outlier"
 
 
-for cv in range(CV + 1):
+for cv in cv_list:
     with open(load_path/f'simplex_cv{cv}.pkl', 'rb') as f:
         simplex = pkl.load(f)
     with open(load_path/f'nn_dist_cv{cv}.pkl', 'rb') as f:

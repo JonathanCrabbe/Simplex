@@ -4,19 +4,25 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import argparse
 
-CV = 4
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+",  default=[0, 1, 2, 3, 4],
+                    help="The list of experiment cv identifiers to plot", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble': r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
 test_size = 2000
 n_outliers = int(test_size/2)
-metrics = np.zeros((4, test_size, CV + 1))
+metrics = np.zeros((4, test_size, len(cv_list)))
 n_inspected = [n for n in range(test_size)]
 load_dir = Path.cwd() / "experiments/results/ar/outlier"
 
-for cv in range(CV + 1):
+for cv in cv_list:
     with open(load_dir/f'true_cv{cv}.pkl', 'rb') as f:
         true_reps = pkl.load(f)
     with open(load_dir/f'simplex_cv{cv}.pkl', 'rb') as f:

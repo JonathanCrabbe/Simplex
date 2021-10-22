@@ -6,20 +6,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 from pathlib import Path
+import argparse
 
-CV = 9
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+",  default=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                    help="The list of experiment cv identifiers to plot", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
 current_path = Path.cwd()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble': r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
 test_size = 200
-metrics = np.zeros((4, test_size, CV + 1))
-accuracies = np.zeros((4, test_size, CV + 1))
+metrics = np.zeros((4, test_size, len(cv_list)))
+accuracies = np.zeros((4, test_size, len(cv_list)))
 n_inspected = [n for n in range(test_size)]
 load_path = current_path/"experiments/results/prostate/outlier"
 
-for cv in range(CV + 1):
+for cv in cv_list:
     classifier = MortalityPredictor(n_cont=3)
     classifier.load_state_dict(torch.load(load_path/f'model_cv{cv}.pth'))
     classifier.to(device)
@@ -35,7 +41,6 @@ for cv in range(CV + 1):
 
     latents_true = test_latent_reps.to(device)
     test_predictions = torch.argmax(classifier.latent_to_presoftmax(latents_true), dim=-1)
-    #print(accuracy_score(test_targets.cpu().numpy(), test_predictions.cpu().numpy()))
     simplex_latent_approx = simplex.latent_approx().to(device)
     nn_dist_latent_approx = nn_dist.latent_approx().to(device)
     nn_uniform_latent_approx = nn_uniform.latent_approx().to(device)

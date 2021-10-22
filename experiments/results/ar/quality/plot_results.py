@@ -6,9 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 from pathlib import Path
+import argparse
 
-CV = 4
-k_list = [2, 5, 10, 50]
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+",  default=[0, 1, 2, 3, 4],
+                    help="The list of experiment cv identifiers to plot", type=int)
+parser.add_argument("-k_list", nargs="+",  default=[2, 5, 10, 50],
+                    help="The list of active corpus members considered", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
+k_list = args.k_list
 explainer_names = ['simplex', 'knn_uniform', 'knn_dist']
 names_dict = {'simplex': 'SimplEx', 'knn_uniform': 'KNN Uniform', 'knn_dist': 'KNN Distance'}
 line_styles = {'simplex': '-', 'knn_uniform': '--', 'knn_dist': ':'}
@@ -21,7 +29,7 @@ params = {'text.latex.preamble' : r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
 load_dir = Path.cwd() / "experiments/results/ar/quality/"
 
-for cv in range(CV + 1):
+for cv in cv_list:
     for k in k_list:
         with open(load_dir/f'true_k{k}_cv{cv}.pkl', 'rb') as f:
             latent_true, output_true = pkl.load(f)

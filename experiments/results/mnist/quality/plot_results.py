@@ -7,9 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 from pathlib import Path
+import argparse
 
-CV = 9
-n_keep_list = [3, 5, 10, 20, 50]
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+", default=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                    help="The list of experiment cv identifiers to plot", type=int)
+parser.add_argument("-k_list", nargs="+", default=[3, 5, 10, 50],
+                    help="The list of active corpus members considered", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
+k_list = args.k_list
 explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 names_dict = {'simplex': 'SimplEx', 'nn_uniform': 'KNN Uniform', 'nn_dist': 'KNN Distance'}
 line_styles = {'simplex': '-', 'nn_uniform': '--', 'nn_dist': ':'}
@@ -20,15 +27,15 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble' : r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
-representer_metrics = np.zeros((2, CV+1))
+representer_metrics = np.zeros((2, len(cv_list)))
 current_path = Path.cwd()
 load_path = current_path/"experiments/results/mnist/quality"
-for cv in range(CV + 1):
+for cv in cv_list:
     classifier = MnistClassifier()
     classifier.load_state_dict(torch.load(load_path/f'model_cv{cv}.pth'))
     classifier.to(device)
     classifier.eval()
-    for n_keep in n_keep_list:
+    for n_keep in k_list:
         for explainer_name in explainer_names:
             with open(load_path/f'{explainer_name}_cv{cv}_n{n_keep}.pkl', 'rb') as f:
                 explainer = pkl.load(f)
@@ -61,9 +68,9 @@ std_df = results_df.groupby(['explainer', 'n_keep']).aggregate('std').unstack(le
 for m, metric_name in enumerate(metric_names):
     plt.figure(m + 1)
     for explainer_name in explainer_names:
-        plt.plot(n_keep_list, mean_df[metric_name, explainer_name], line_styles[explainer_name],
+        plt.plot(k_list, mean_df[metric_name, explainer_name], line_styles[explainer_name],
                  label=names_dict[explainer_name])
-        plt.fill_between(n_keep_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
+        plt.fill_between(k_list, mean_df[metric_name, explainer_name] - std_df[metric_name, explainer_name],
                          mean_df[metric_name, explainer_name] + std_df[metric_name, explainer_name], alpha=0.2)
 
 plt.figure(1)

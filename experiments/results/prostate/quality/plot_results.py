@@ -7,9 +7,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 from pathlib import Path
+import argparse
 
-CV = 9
-n_keep_list = [2, 5, 10, 50]
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+",  default=[0, 1, 2, 3, 4],
+                    help="The list of experiment cv identifiers to plot", type=int)
+parser.add_argument("-k_list", nargs="+",  default=[2, 5, 10, 50],
+                    help="The list of active corpus members considered", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
+n_keep_list = args.k_list
 explainer_names = ['simplex', 'nn_uniform', 'nn_dist']
 names_dict = {'simplex': 'SimplEx', 'nn_uniform': 'KNN Uniform', 'nn_dist': 'KNN Distance'}
 line_styles = {'simplex': '-', 'nn_uniform': '--', 'nn_dist': ':'}
@@ -20,11 +28,11 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 plt.rc('text', usetex=True)
 params = {'text.latex.preamble' : r'\usepackage{amsmath}'}
 plt.rcParams.update(params)
-representer_metrics = np.zeros((2, CV+1))
+representer_metrics = np.zeros((2, len(cv_list)))
 current_path = Path.cwd()
 load_path = current_path/"experiments/results/prostate/quality"
 
-for cv in range(CV + 1):
+for cv in cv_list:
     classifier = MortalityPredictor(n_cont=3)
     classifier.load_state_dict(torch.load(load_path/f'model_cv{cv}.pth'))
     classifier.to(device)

@@ -5,14 +5,21 @@ import seaborn as sns
 import json
 from sklearn.metrics import r2_score
 from pathlib import Path
+import argparse
 
-CV = 4
-n_keep_list = [2, 5, 10, 20, 50]
-r2_array = np.zeros((2, len(n_keep_list), CV+1))
+parser = argparse.ArgumentParser()
+parser.add_argument("-cv_list", nargs="+",  default=[0, 1, 2, 3, 4],
+                    help="The list of experiment cv identifiers to plot", type=int)
+parser.add_argument("-k_list", nargs="+",  default=[2, 5, 10, 50],
+                    help="The list of active corpus members considered", type=int)
+args = parser.parse_args()
+cv_list = args.cv_list
+n_keep_list = args.k_list
+r2_array = np.zeros((2, len(n_keep_list), len(cv_list)))
 current_path = Path.cwd()
 load_path = current_path/"experiments/results/mnist/influence"
 
-for cv in range(CV+1):
+for cv in cv_list:
     with open(load_path/f'corpus_latent_reps_cv{cv}.pkl', 'rb') as f:
         corpus_latent_reps = pkl.load(f)
     with open(load_path/f'test_latent_reps_cv{cv}.pkl', 'rb') as f:
