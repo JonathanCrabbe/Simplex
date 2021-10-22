@@ -1,15 +1,13 @@
 import numpy as np
 import torch
+import argparse
 import os
 import captum as cap
-import pytorch_influence_functions as ptif
 import torch.optim as optim
-import seaborn as sns
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from captum.attr._utils.visualization import visualize_image_attr
 from experiments.mnist import load_mnist
-from matplotlib import cm
 from experiments.prostate_cancer import load_seer, ProstateCancerDataset, load_cutract
 from models.image_recognition import MnistClassifier
 from models.tabular_data import MortalityPredictor
@@ -20,10 +18,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
 from visualization.tables import plot_prostate_patient
+from pathlib import Path
 
 
-def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_model: bool = True, test_id: int = 22,
-                   n_keep: int = 3):
+def mnist_use_case(random_seed=42, save_path: str = 'experiments/results/mnist/use_case/',
+                   train_model: bool = True, test_id: int = 22, n_keep: int = 3) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -36,7 +35,8 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
     print(20 * '-' + f'Welcome in the use case for MNIST' + 20 * '-')
 
     # Create save directory
-    if not os.path.exists(save_path):
+    save_path = Path.cwd() / save_path
+    if not save_path.exists():
         print(f'Creating a saving path at {save_path}')
         os.makedirs(save_path)
 
@@ -50,7 +50,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
 
     # Train the model
     if train_model:
-        # Train the model
+        print(20*"-" + "Fitting model" + 20*"-")
         optimizer = optim.Adam(classifier.parameters())
         train_losses = []
         train_counter = []
@@ -72,8 +72,8 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
                     train_losses.append(loss.item())
                     train_counter.append(
                         (batch_idx * 64) + ((epoch - 1) * len(train_loader.dataset)))
-                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model.pth'))
-                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer.pth'))
+                    torch.save(classifier.state_dict(), save_path/f'model.pth')
+                    torch.save(optimizer.state_dict(), save_path/f'optimizer.pth')
 
         def test():
             classifier.eval()
@@ -98,7 +98,7 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
             test()
 
     # Load the model
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model.pth')))
+    classifier.load_state_dict(torch.load(save_path / f'model.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -111,32 +111,31 @@ def mnist_use_case(random_seed=42, save_path='./results/use_case/mnist/', train_
     _, (test_inputs, test_target) = next(test_examples)
     test_inputs = test_inputs[test_id:test_id + 1].to(device).detach()
 
+    print(20*"-" + "Fitting SimplEx" + 20*"-")
     simplex = Simplex(corpus_inputs, classifier.latent_representation(corpus_inputs).detach())
     scheduler = ExponentialScheduler(x_init=0.1, x_final=1000, n_epoch=20000)
-    weights = simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
-                          n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
+    simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
+                n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
 
     input_baseline = -0.4242 * torch.ones(corpus_inputs.shape, device=device)
-    jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
-                                                       n_bins=200)
+    _ = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline, n_bins=200)
     decomposition = simplex.decompose(0)
 
     output = classifier(test_inputs)
     title = f'Prediction: {output.data.max(1, keepdim=True)[1][0].item()}'
     fig = plot_mnist(simplex.test_examples[0][0].cpu().numpy(), title)
-    # plt.savefig(os.path.join(save_path, f'test_image_id{test_id}'))
+    fig.savefig(save_path / f'test_image_id{test_id}')
     for i in range(n_keep):
         image = decomposition[i][1].cpu().numpy().transpose((1, 2, 0))
         saliency = decomposition[i][2].cpu().numpy().transpose((1, 2, 0))
         title = f'Weight: {decomposition[i][0]:.2g}'
-        figure, axis = visualize_image_attr(saliency, image, method='blended_heat_map',
-                                            sign='all', title=title, use_pyplot=True)
-        plt.show()
-        # plt.savefig(os.path.join(save_path, f'corpus_image{i + 1}_id{test_id}'))
+        fig, axis = visualize_image_attr(saliency, image, method='blended_heat_map',
+                                         sign='all', title=title, use_pyplot=True)
+        fig.savefig(save_path / f'corpus_image{i + 1}_id{test_id}')
 
 
-def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/use_case/', train_model: bool = True,
-                      n_keep: int = 3, test_id=12):
+def prostate_use_case(random_seed=42, save_path='experiments/results/prostate/use_case/one_corpus', train_model: bool = True,
+                      n_keep: int = 3, test_id: int = 12) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -146,11 +145,11 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
     n_epoch = 10
     log_interval = 100
 
-
     print(20 * '-' + f'Welcome in the use case for Prostate Cancer' + 20 * '-')
 
     # Create save directory
-    if not os.path.exists(save_path):
+    save_path = Path.cwd() / save_path
+    if not save_path.exists():
         print(f'Creating a saving path at {save_path}')
         os.makedirs(save_path)
 
@@ -170,7 +169,7 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
 
     # Train the model
     if train_model:
-        # Train the model
+        print(20*"-" + "Fitting model" + 20*"-")
         optimizer = optim.Adam(classifier.parameters())
         train_losses = []
         train_counter = []
@@ -192,8 +191,8 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
                     train_losses.append(loss.item())
                     train_counter.append(
                         (batch_idx * 64) + ((epoch - 1) * len(train_loader.dataset)))
-                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model.pth'))
-                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer.pth'))
+                    torch.save(classifier.state_dict(), save_path/f'model.pth')
+                    torch.save(optimizer.state_dict(), save_path/f'optimizer.pth')
 
         def test():
             classifier.eval()
@@ -218,7 +217,7 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
             test()
 
     # Load the model
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -240,21 +239,23 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
     plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
 
     # Generate a SHAP explanation:
+    print(20 * "-" + "Fitting SHAP" + 20 * "-")
     shap_expl = cap.attr.KernelShap(classifier)
-    shap_attr = shap_expl.attribute(test_inputs, target=predicted_mortality, baselines=input_baseline[0])[0].cpu().numpy()
+    shap_attr = shap_expl.attribute(test_inputs, target=predicted_mortality, baselines=input_baseline[0])[
+        0].cpu().numpy()
     title = 'SHAP Saliency'
     plot_prostate_patient(test_inputs[0].cpu().numpy(), title, shap_attr)
     plt.savefig(os.path.join(save_path, f'shap_test_patient_id{test_id}'))
 
     # Generate a SimplEx explanation:
+    print(20 * "-" + "Fitting SimplEx" + 20 * "-")
     simplex = Simplex(corpus_inputs, classifier.latent_representation(corpus_inputs).detach())
     scheduler = ExponentialScheduler(x_init=0.1, x_final=100, n_epoch=20000)
-    weights = simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
-                          n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
-    jacobian_projections = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
+    simplex.fit(test_inputs, classifier.latent_representation(test_inputs).detach(), n_keep=n_keep,
+                n_epoch=20000, reg_factor_scheduler=scheduler, reg_factor=0.1)
+    _ = simplex.jacobian_projection(test_id=0, model=classifier, input_baseline=input_baseline,
                                                        n_bins=100)
     decomposition, sort_id = simplex.decompose(0, return_id=True)
-
 
     for i in range(n_keep):
         input = decomposition[i][1].cpu().numpy()
@@ -262,10 +263,11 @@ def prostate_use_case(random_seed=42, save_path='./experiments/results/prostate/
         saliency = decomposition[i][2].cpu().numpy()
         title = f'Weight: {decomposition[i][0]:.2g} ; True Outcome: {target}'
         plot_prostate_patient(input, title, saliency)
-        plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
+        plt.savefig(save_path/f'corpus_patient{i + 1}_id{test_id}')
 
 
-def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/', train_model: bool = True):
+def prostate_two_corpus(random_seed=42, save_path='experiments/results/prostate/use_case/two_corpora',
+                        train_model: bool = True, test_id: int = 66, n_keep: int = 3) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     torch.random.manual_seed(random_seed)
     torch.backends.cudnn.enabled = False
@@ -274,13 +276,13 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
     corpus_size = 1000
     n_epoch = 10
     log_interval = 100
-    n_keep = 3
-    test_id = 123
 
-    print(20 * '-' + f'Welcome in the two corpus use case for Prostate Cancer' + 20 * '-')
+
+    print(20 * '-' + f'Welcome in the two corpora use case for Prostate Cancer' + 20 * '-')
 
     # Create save directory
-    if not os.path.exists(save_path):
+    save_path = Path.cwd() / save_path
+    if not save_path.exists():
         print(f'Creating a saving path at {save_path}')
         os.makedirs(save_path)
 
@@ -300,7 +302,7 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
 
     # Train the model
     if train_model:
-        # Train the model
+        print(20*"-" + "Fitting model" + 20*"-")
         optimizer = optim.Adam(classifier.parameters())
         train_losses = []
         train_counter = []
@@ -322,8 +324,8 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
                     train_losses.append(loss.item())
                     train_counter.append(
                         (batch_idx * 64) + ((epoch - 1) * len(train_loader.dataset)))
-                    torch.save(classifier.state_dict(), os.path.join(save_path, f'model.pth'))
-                    torch.save(optimizer.state_dict(), os.path.join(save_path, f'optimizer.pth'))
+                    torch.save(classifier.state_dict(), save_path/f'model.pth')
+                    torch.save(optimizer.state_dict(), save_path/f'optimizer.pth')
 
         def test():
             classifier.eval()
@@ -348,7 +350,7 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
             test()
 
     # Load the model
-    classifier.load_state_dict(torch.load(os.path.join(save_path, f'model.pth')))
+    classifier.load_state_dict(torch.load(save_path/f'model.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -363,7 +365,7 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
     X_uk, y_uk = load_cutract(random_seed)
     uk_data = ProstateCancerDataset(X_uk, y_uk)
     data_loader_uk = DataLoader(uk_data, batch_size=corpus_size, shuffle=True)
-    uk_examples = enumerate(corpus_loader_usa)
+    uk_examples = enumerate(data_loader_uk)
     _, (corpus_uk_inputs, corpus_uk_target) = next(uk_examples)
     corpus_uk_inputs = corpus_uk_inputs.to(device).detach()
     corpus_uk_predictions = torch.argmax(classifier(corpus_uk_inputs), dim=-1).cpu().numpy()
@@ -371,38 +373,37 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
     test_uk_inputs = test_uk_inputs.to(device).detach()
     test_uk_target = test_uk_target.cpu().numpy()
     test_uk_predictions = torch.argmax(classifier(test_uk_inputs), dim=-1).cpu().numpy()
-
-    print(f'Accuracy score of the model on the UK cohort: {accuracy_score(test_uk_target, test_uk_predictions):.2g}.')
+    print(20 * "-" + f'Accuracy score of the model on the UK cohort:'
+                     f' {accuracy_score(test_uk_target, test_uk_predictions):.2g}' + 20 * "-")
 
     # Extract a mislabeled example that we will interpret with the two corpus
     mislabeled_examples = np.nonzero(test_uk_predictions != test_uk_target)[0]
-    selected_id = mislabeled_examples[66]  # Type 1: 66 12     ; Type 2: 31 42 14
-    selected_input = test_uk_inputs[selected_id:selected_id+1]
+    selected_id = mislabeled_examples[test_id]
+    selected_input = test_uk_inputs[selected_id:selected_id + 1]
     selected_latent_rep = classifier.latent_representation(selected_input).detach()
     scheduler = ExponentialScheduler(x_init=0.1, x_final=100, n_epoch=20000)
 
-    print(20*'-'+'Now fitting the USA SimplEx'+20*'-')
+    print(20 * '-' + 'Now fitting the USA SimplEx' + 20 * '-')
     simplex_usa = Simplex(corpus_usa_inputs, classifier.latent_representation(corpus_usa_inputs).detach())
-    _ = simplex_usa.fit(selected_input, selected_latent_rep, n_keep=n_keep,
-                        n_epoch=20000, reg_factor=0.1, reg_factor_scheduler=scheduler)
+    simplex_usa.fit(selected_input, selected_latent_rep, n_keep=n_keep,
+                    n_epoch=20000, reg_factor=0.1, reg_factor_scheduler=scheduler)
     input_baseline_usa = torch.mean(corpus_usa_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
-    jacobian_projections_usa = simplex_usa.jacobian_projection(test_id=0, model=classifier,
-                                                               input_baseline=input_baseline_usa, n_bins=500)
+    _ = simplex_usa.jacobian_projection(test_id=0, model=classifier,
+                                        input_baseline=input_baseline_usa, n_bins=500)
     decomposition_usa, corpus_ids_usa = simplex_usa.decompose(0, return_id=True)
 
     print(20 * '-' + 'Now fitting the UK SimplEx' + 20 * '-')
     simplex_uk = Simplex(corpus_uk_inputs, classifier.latent_representation(corpus_uk_inputs).detach())
-    _ = simplex_uk.fit(selected_input, selected_latent_rep, n_keep=n_keep,
-                       n_epoch=20000, reg_factor=0.1, reg_factor_scheduler=scheduler)
+    simplex_uk.fit(selected_input, selected_latent_rep, n_keep=n_keep,
+                   n_epoch=20000, reg_factor=0.1, reg_factor_scheduler=scheduler)
     input_baseline_uk = torch.mean(corpus_uk_inputs, dim=0, keepdim=True).repeat(corpus_size, 1)
-    jacobian_projections_uk = simplex_uk.jacobian_projection(test_id=0, model=classifier,
-                                                             input_baseline=input_baseline_uk, n_bins=500)
+    _ = simplex_uk.jacobian_projection(test_id=0, model=classifier,
+                                       input_baseline=input_baseline_uk, n_bins=500)
     decomposition_uk, corpus_ids_uk = simplex_uk.decompose(0, return_id=True)
 
     title = f'Predicted Mortality: {test_uk_predictions[selected_id]} ; \n True Mortality: {test_uk_target[selected_id]}'
     plot_prostate_patient(selected_input[0].cpu().numpy(), title)
-    plt.show()
-    #plt.savefig(os.path.join(save_path, f'test_patient_id{test_id}'))
+    plt.savefig(save_path/f'test_patient_id{test_id}')
     for i in range(n_keep):
         input_usa = decomposition_usa[i][1].cpu().numpy()
         saliency_usa = decomposition_usa[i][2].cpu().numpy()
@@ -410,19 +411,31 @@ def prostate_two_corpus(random_seed=42, save_path='./results/use_case/prostate/'
                 f'Predicted Mortality: {corpus_usa_predictions[corpus_ids_usa[i]]} ; \n' \
                 f'True Mortality: {corpus_usa_target[corpus_ids_usa[i]]}'
         plot_prostate_patient(input_usa, title, saliency_usa)
-        #plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
-        plt.show()
+        plt.savefig(save_path/f'corpus_usa_patient{i + 1}_id{test_id}')
         input_uk = decomposition_uk[i][1].cpu().numpy()
         saliency_uk = decomposition_uk[i][2].cpu().numpy()
         title = f'UK Patient ; Weight: {decomposition_uk[i][0]:.2g} ; \n ' \
                 f'Predicted Mortality: {corpus_uk_predictions[corpus_ids_uk[i]]}  ; \n' \
                 f'True Mortality: {corpus_uk_target[corpus_ids_uk[i]]}'
         plot_prostate_patient(input_uk, title, saliency_uk)
-        # plt.savefig(os.path.join(save_path, f'corpus_patient{i + 1}_id{test_id}'))
-        plt.show()
+        plt.savefig(save_path/f'corpus_uk_patient{i + 1}_id{test_id}')
 
 
 if __name__ == '__main__':
-    #mnist_use_case(train_model=False, test_id=123, n_keep=2)
-    prostate_use_case(train_model=False, test_id=7, n_keep=3)
-    #prostate_two_corpus(train_model=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-name', type=str, default='mnist', help='Use case to perform')
+    parser.add_argument('--train', dest='train', action='store_true', help='Indicates if a model should be trained')
+    parser.set_defaults(train=False)
+    parser.add_argument('-n_keep', type=int, default=3, help='The number of corpus examples that should be used')
+    parser.add_argument('-test_id', type=int, default=1, help='The dataset id of the example to explain')
+    args = parser.parse_args()
+    args = parser.parse_args()
+    if args.name == "mnist":
+        mnist_use_case(train_model=args.train, test_id=args.test_id, n_keep=args.n_keep)
+    elif args.name == "prostate":
+        prostate_use_case(train_model=args.train, test_id=args.test_id, n_keep=args.n_keep)
+    elif args.name == "prostate_two_corpora":
+        prostate_two_corpus(train_model=args.train, test_id=args.test_id, n_keep=args.n_keep)
+    else:
+        raise ValueError("Invalid use case name. Available names: mnist, prostate, prostate_two_corpora")
+

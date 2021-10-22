@@ -538,12 +538,12 @@ def timing_experiment() -> None:
     CV = 10
     times = np.zeros((4, CV))
     load_path = Path.cwd() / "experiments/results/mnist/quality"
-    if not (load_path/'model_cv0.pth').exists():
+    if not (load_path / 'model_cv0.pth').exists():
         raise RuntimeError("The timing experiment should be run after the approximation quality experiment.")
 
     # Load the model
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(load_path/'model_cv0.pth'))
+    classifier.load_state_dict(torch.load(load_path / 'model_cv0.pth'))
     classifier.to(device)
     classifier.eval()
 
@@ -631,10 +631,9 @@ def main(experiment: str, cv: int) -> None:
                          "approximation_quality , outlier_detection , jacobian_corruption, influence, timing.")
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
-parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
-args = parser.parse_args()
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-experiment', type=str, default='approximation_quality', help='Experiment to perform')
+    parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
+    args = parser.parse_args()
     main(args.experiment, args.cv)

@@ -474,11 +474,9 @@ def main(experiment: str = 'approximation_quality', cv: int = 0) -> None:
         raise ValueError("The name of the experiment is not valid. "
                          "Valid names are: approximation_quality , outlier_detection , corpus_size.  ")
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument('-experiment', type=str, default='outlier_detection', help='Experiment to perform')
-parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
-args = parser.parse_args()
-
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-experiment', type=str, default='outlier_detection', help='Experiment to perform')
+    parser.add_argument('-cv', type=int, default=0, help='Cross validation parameter')
+    args = parser.parse_args()
     main(args.experiment, args.cv)
