@@ -5,7 +5,7 @@ from models.base import BlackBox
 
 
 class MortalityPredictor(BlackBox):
-    def __init__(self, n_cont: int = 3):
+    def __init__(self, n_cont: int = 3) -> None:
         super().__init__()
         self.n_cont = n_cont
         self.lin1 = nn.Linear(26, 200)
@@ -14,13 +14,13 @@ class MortalityPredictor(BlackBox):
         self.bn1 = nn.BatchNorm1d(self.n_cont)
         self.drops = nn.Dropout(0.3)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.latent_representation(x)
         x = self.lin3(x)
         x = F.log_softmax(x, dim=-1)
         return x
 
-    def latent_representation(self, x):
+    def latent_representation(self, x: torch.Tensor) -> torch.Tensor:
         x_cont, x_disc = x[:, :self.n_cont], x[:, self.n_cont:]
         x_cont = self.bn1(x_cont)
         x = torch.cat([x_cont, x_disc], 1)
@@ -30,12 +30,12 @@ class MortalityPredictor(BlackBox):
         x = self.drops(x)
         return x
 
-    def probabilities(self, x):
+    def probabilities(self, x: torch.Tensor) -> torch.Tensor:
         x = self.latent_representation(x)
         x = self.lin3(x)
         x = F.softmax(x, dim=-1)
         return x
 
-    def latent_to_presoftmax(self, x):
+    def latent_to_presoftmax(self, x: torch.Tensor) -> torch.Tensor:
         x = self.lin3(x)
         return x

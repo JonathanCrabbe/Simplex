@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
 
-def plot_mnist(data, title=''):
+def plot_mnist(data, title: str = '') -> None:
     fig = plt.figure()
     plt.imshow(data, cmap='gray', interpolation='none')
     plt.title(title)

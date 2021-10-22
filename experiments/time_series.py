@@ -9,10 +9,8 @@ from torch.utils.data import DataLoader
 import numpy as np
 import torch
 import os
-import seaborn as sns
 import pickle as pkl
 import argparse
-import matplotlib.pyplot as plt
 
 
 class TimeSeriesDataset(torch.utils.data.Dataset):
@@ -21,15 +19,15 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
         self.X = X
         self.y = y
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.X)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> tuple:
         return self.X[idx], self.y[idx]
 
 
 def generate_ar(ar_coefs: np.ndarray, random_seed: int = 42, length: int = 50, n_samples: int = 10000,
-                variance: float = .1):
+                variance: float = .1) -> tuple:
     np.random.seed(random_seed)
     p = len(ar_coefs)
     X = np.zeros((n_samples, length+1))
@@ -47,7 +45,8 @@ def generate_ar(ar_coefs: np.ndarray, random_seed: int = 42, length: int = 50, n
     return X[:, :-1], X[:, 1:]
 
 
-def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str = 'experiments/results/ar/quality', train=True):
+def ar_precision(random_seed: int = 42, cv: int = 0,
+                 save_path: str = 'experiments/results/ar/quality', train: bool = True) -> None:
 
     print(100 * '-' + '\n' + 'Welcome in the approximation quality experiment for AR. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -175,7 +174,8 @@ def ar_precision(random_seed: int = 42, cv: int = 0, save_path: str = 'experimen
             pkl.dump((latent_knn_dist, output_knn_dist), f)
 
 
-def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str = 'experiments/results/ar/outlier', train=True):
+def outlier_detection(random_seed: int = 42, cv: int = 0,
+                      save_path: str = 'experiments/results/ar/outlier', train: bool = True) -> None:
 
     print(100 * '-' + '\n' + 'Welcome in the outlier detection experiment for AR. \n'
                              f'Settings: random_seed = {random_seed} ; cv = {cv}.\n'
@@ -300,26 +300,8 @@ def outlier_detection(random_seed: int = 42, cv: int = 0, save_path: str = 'expe
     with open(save_path/f'knn_dist_cv{cv}.pkl', 'wb') as f:
         pkl.dump(all_latent_knn_dist, f)
 
-    '''
-    residuals_simplex = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_simplex)**2).sum(axis=-1)))
-    residuals_knn_uniform = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_uniform) ** 2).sum(axis=-1)))
-    residuals_knn_dist = torch.from_numpy(np.sqrt(((all_latent_true - all_latent_knn_dist) ** 2).sum(axis=-1)))
-    n_inspected = [n for n in range(1, len(residuals_simplex))]
-    simplex_n_detected = [torch.count_nonzero(torch.topk(residuals_simplex, k=n)[1] > n_outlier-1) for n in n_inspected]
-    nn_dist_n_detected = [torch.count_nonzero(torch.topk(residuals_knn_dist, k=n)[1] > n_outlier-1) for n in n_inspected]
-    nn_uniform_n_detected = [torch.count_nonzero(torch.topk(residuals_knn_uniform, k=n)[1] > n_outlier-1) for n in n_inspected]
-    sns.set()
-    plt.plot(n_inspected, simplex_n_detected, label='Simplex')
-    plt.plot(n_inspected, nn_dist_n_detected, label='3NN Distance')
-    plt.plot(n_inspected, nn_uniform_n_detected, label='3NN Uniform')
-    plt.xlabel('Number of inspected examples')
-    plt.ylabel('Number of outliers detected')
-    plt.legend()
-    plt.show()
-    '''
 
-
-def main(experiment: str = 'approximation_quality', cv: int = 0):
+def main(experiment: str = 'approximation_quality', cv: int = 0) -> None:
     if experiment == 'approximation_quality':
         ar_precision(cv=cv)
     elif experiment == 'outlier_detection':

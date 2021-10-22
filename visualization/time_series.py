@@ -3,7 +3,7 @@ import seaborn as sns
 import numpy as np
 
 
-def plot_time_series(x: np.ndarray, title=None):
+def plot_time_series(x: np.ndarray, title=None) -> None:
     sns.set(font_scale=1.5)
     sns.set_style("white")
     t = np.arange(start=0, stop=x.shape[0])

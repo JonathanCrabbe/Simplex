@@ -1,10 +1,11 @@
+import matplotlib.axes
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
 
-def plot_prostate_patient(input: np.ndarray, title: str, saliency=None):
+def plot_prostate_patient(input: np.ndarray, title: str, saliency=None) -> matplotlib.axes.Axes:
     sns.set()
     treatment_list = np.array(['CM', 'PHT', 'RT-RDx', 'RT-Sx'])
     fig, ax = plt.subplots()

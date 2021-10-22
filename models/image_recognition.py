@@ -1,10 +1,11 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.base import BlackBox
 
 
 class MnistClassifier(BlackBox):
-    def __init__(self):
+    def __init__(self) -> None:
         super(MnistClassifier, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
@@ -12,7 +13,7 @@ class MnistClassifier(BlackBox):
         self.fc1 = nn.Linear(320, 50)
         self.fc2 = nn.Linear(50, 10)
 
-    def latent_representation(self, x):
+    def latent_representation(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         x = x.view(-1, 320)
@@ -20,19 +21,19 @@ class MnistClassifier(BlackBox):
         x = F.dropout(x, training=self.training)
         return x
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.latent_representation(x)
         x = self.fc2(x)
         return F.log_softmax(x, dim=-1)
 
-    def probabilities(self, x):
+    def probabilities(self, x: torch.Tensor) -> torch.Tensor:
         x = self.latent_representation(x)
         x = self.fc2(x)
         return F.softmax(x, dim=-1)
 
-    def presoftmax(self, x):
+    def presoftmax(self, x: torch.Tensor) -> torch.Tensor:
         x = self.latent_representation(x)
         return self.fc2(x)
 
-    def latent_to_presoftmax(self, h):
+    def latent_to_presoftmax(self, h: torch.Tensor) -> torch.Tensor:
         return self.fc2(h)
