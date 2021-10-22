@@ -62,7 +62,7 @@ class Simplex:
         approx_reps = self.weights @ self.corpus_latent_reps
         return approx_reps
 
-    def decompose(self, test_id: int, return_id: bool = False) -> list:
+    def decompose(self, test_id: int, return_id: bool = False) -> list or tuple:
         assert test_id < self.n_test
         weights = self.weights[test_id].cpu().numpy()
         sort_id = np.argsort(weights)[::-1]
