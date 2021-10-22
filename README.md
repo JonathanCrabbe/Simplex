@@ -158,6 +158,15 @@ python -m experiments.results.mnist.influence.plot_results -cv_list CV1 CV2 CV3 
 ```
 3. The resulting plots and data are saved [here](experiments/results/mnist/influence).
 
+Note: some problems can appear with the package 
+[Pytorch Influence Functions](https://github.com/nimarb/pytorch_influence_functions).
+If this is the case, please change ``calc_influence_function.py`` in the following way:
+
+```python
+343: influences.append(tmp_influence) ==> influences.append(tmp_influence.cpu())
+438: influences_meta['test_sample_index_list'] = sample_list ==> #influences_meta['test_sample_index_list'] = sample_list
+```
+
 ### Reproducing AR Approximation Quality Experiment
 1. Run the following script for different values of CV (the results from the paper 
    were obtained by taking all integer CV between 0 and 4) 
