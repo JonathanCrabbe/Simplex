@@ -8,6 +8,11 @@ from models.base import BlackBox
 
 class Simplex:
     def __init__(self, corpus_examples: torch.Tensor, corpus_latent_reps: torch.Tensor) -> None:
+        """
+        Initialize a SimplEx explainer
+        :param corpus_examples: corpus input features
+        :param corpus_latent_reps: corpus latent representations
+        """
         self.corpus_examples = corpus_examples
         self.corpus_latent_reps = corpus_latent_reps
         self.corpus_size = corpus_examples.shape[0]
@@ -21,6 +26,17 @@ class Simplex:
 
     def fit(self, test_examples: torch.Tensor, test_latent_reps: torch.Tensor,
             n_epoch: int = 10000, reg_factor: float = 1.0, n_keep: int = 5, reg_factor_scheduler=None) -> None:
+        """
+        Fit the SimplEx explainer on test examples
+        :param test_examples: test example input features
+        :param test_latent_reps: test example latent representations
+        :param n_keep: number of neighbours used to build a latent decomposition
+        :param n_epoch: number of epochs to fit the SimplEx
+        :param reg_factor: regularization prefactor in the objective to control the number of allowed corpus members
+        :param n_keep: number of corpus members allowed in the decomposition
+        :param reg_factor_scheduler: scheduler for the variation of the regularization prefactor during optimization
+        :return:
+        """
         n_test = test_latent_reps.shape[0]
         preweights = torch.zeros((n_test, self.corpus_size), device=test_latent_reps.device, requires_grad=True)
         optimizer = torch.optim.Adam([preweights])
@@ -50,6 +66,11 @@ class Simplex:
         self.hist = hist
 
     def to(self, device: torch.device) -> None:
+        """
+        Transfer the tensors to device
+        :param device: the device where the tensors should be transferred
+        :return:
+        """
         self.corpus_examples = self.corpus_examples.to(device)
         self.corpus_latent_reps = self.corpus_latent_reps.to(device)
         self.test_examples = self.test_examples.to(device)
@@ -59,10 +80,21 @@ class Simplex:
             self.jacobian_projections = self.jacobian_projections.to(device)
 
     def latent_approx(self) -> torch.Tensor:
+        """
+        Returns the latent approximation of test_latent_reps with SimplEx
+        :return: approximate latent representations as a tensor
+        """
         approx_reps = self.weights @ self.corpus_latent_reps
         return approx_reps
 
     def decompose(self, test_id: int, return_id: bool = False) -> list or tuple:
+        """
+        Returns a complete corpus decomposition of the test example identified with test_id
+        :param test_id: batch index of the test example
+        :param return_id: specify the batch index of each corpus example in the decomposition
+        :return: contribution of each corpus example in the decomposition in the form
+                 [weight, features, jacobian projections]
+        """
         assert test_id < self.n_test
         weights = self.weights[test_id].cpu().numpy()
         sort_id = np.argsort(weights)[::-1]
@@ -72,6 +104,10 @@ class Simplex:
             return [(weights[i], self.corpus_examples[i], self.jacobian_projections[i]) for i in sort_id]
 
     def plot_hist(self) -> None:
+        """
+        Plot the histogram that describes SimplEx fitting over the epochs
+        :return:
+        """
         sns.set()
         fig, axs = plt.subplots(2, sharex=True)
         epochs = [e for e in range(self.hist.shape[0])]
@@ -83,6 +119,14 @@ class Simplex:
 
     def jacobian_projection(self, test_id: int, model: BlackBox, input_baseline: torch.Tensor, n_bins: int = 100) \
             -> torch.Tensor:
+        """
+        Compute the Jacobian Projection for the test example identified by test_id
+        :param test_id: batch index of the test example
+        :param model: the black-box model for which the Jacobians are computed
+        :param input_baseline: the baseline input features
+        :param n_bins: number of bins involved in the Riemann sum approximation for the integral
+        :return:
+        """
         corpus_inputs = self.corpus_examples.clone().requires_grad_()
         input_shift = self.corpus_examples - input_baseline
         latent_shift = self.latent_approx()[test_id:test_id + 1] - model.latent_representation(input_baseline)
