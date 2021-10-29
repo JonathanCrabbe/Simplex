@@ -428,10 +428,10 @@ def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jac
     metric_data = []
     df_columns = ["Method", "N_pert", "Residual Shift"]
     current_folder = Path.cwd()
-
+    save_path =  current_folder / save_path
     # Create saving directory if inexistent
-    if not (current_folder / save_path).exists():
-        print(f'Creating the saving directory {current_folder / save_path}')
+    if not save_path.exists():
+        print(f'Creating the saving directory {save_path}')
         os.makedirs(save_path)
 
     # Training a model, save it
@@ -441,7 +441,7 @@ def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jac
 
     # Load the model
     classifier = MnistClassifier()
-    classifier.load_state_dict(torch.load(current_folder / save_path / "model_cv0.pth"))
+    classifier.load_state_dict(torch.load(save_path / "model_cv0.pth"))
     classifier.to(device)
     classifier.eval()
 
@@ -523,7 +523,7 @@ def jacobian_corruption(random_seed=42, save_path='experiments/results/mnist/jac
     sns.set_palette("colorblind")
     sns.boxplot(data=metric_df, x="N_pert", y="Residual Shift", hue="Method")
     plt.xlabel("Number of pixels perturbed")
-    plt.savefig(current_folder / save_path / "box_plot.pdf")
+    plt.savefig(save_path / "box_plot.pdf")
 
 
 def timing_experiment() -> None:
@@ -620,7 +620,7 @@ def main(experiment: str, cv: int) -> None:
     elif experiment == 'outlier_detection':
         outlier_detection(cv)
     elif experiment == 'jacobian_corruption':
-        jacobian_corruption(test_size=100, train=False)
+        jacobian_corruption(test_size=100, train=True)
     elif experiment == 'influence':
         influence_function(n_keep_list=[2, 5, 10, 20, 50], cv=cv)
     elif experiment == 'timing':
