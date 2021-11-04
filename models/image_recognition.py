@@ -6,6 +6,9 @@ from models.base import BlackBox
 
 class MnistClassifier(BlackBox):
     def __init__(self) -> None:
+        """
+        CNN classifier model
+        """
         super(MnistClassifier, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
@@ -27,13 +30,28 @@ class MnistClassifier(BlackBox):
         return F.log_softmax(x, dim=-1)
 
     def probabilities(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Returns the class probabilities for the input x
+        :param x: input features
+        :return: class probabilities
+        """
         x = self.latent_representation(x)
         x = self.fc2(x)
         return F.softmax(x, dim=-1)
 
     def presoftmax(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Returns the preactivation outputs for the input x
+        :param x: input features
+        :return: presoftmax activations
+        """
         x = self.latent_representation(x)
         return self.fc2(x)
 
     def latent_to_presoftmax(self, h: torch.Tensor) -> torch.Tensor:
+        """
+        Maps a latent representation to a preactivation output
+        :param h: latent representations
+        :return: presoftmax activations
+        """
         return self.fc2(h)

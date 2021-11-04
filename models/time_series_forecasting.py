@@ -6,6 +6,14 @@ from models.base import BlackBox
 class TimeSeriesForecaster(BlackBox):
     def __init__(self, input_dim: int = 1, hidden_dim: int = 100, output_dim: int = 1, num_layers: int = 2,
                  batch_size: int = 20) -> None:
+        """
+        Simple LSTM forecaster
+        :param input_dim: dimension of the input space
+        :param hidden_dim: dimension of the latent space
+        :param output_dim: dimension of the output space
+        :param num_layers: number of hidden LSTM layers
+        :param batch_size: size of a batch
+        """
         super(TimeSeriesForecaster, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -23,6 +31,11 @@ class TimeSeriesForecaster(BlackBox):
                 nn.init.xavier_normal_(param)
 
     def init_hidden(self, batch_size: int) -> tuple:
+        """
+        Initialize the LSTM latent representations
+        :param batch_size:
+        :return: initial hidden vectors
+        """
         h0, c0 = torch.zeros(self.num_layers, batch_size, self.hidden_dim),\
                  torch.zeros(self.num_layers, batch_size, self.hidden_dim)
         return h0, c0
@@ -36,6 +49,11 @@ class TimeSeriesForecaster(BlackBox):
         x, self.hidden = self.lstm(x)
         return x[:, -1, :]
 
-    def latent_to_output(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.lin(x)
-        return x
+    def latent_to_output(self, h: torch.Tensor) -> torch.Tensor:
+        """
+        Maps a latent representation to an output
+        :param h: latent representations
+        :return: output prediction
+        """
+        h = self.lin(h)
+        return h
