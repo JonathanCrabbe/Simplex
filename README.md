@@ -23,16 +23,21 @@ All the relevant code can be found in the file [simplex](explainers/simplex.py).
 
 ```python
 from explainers.simplex import Simplex
-from models.base import BlackBox
+from models.image_recognition import MnistClassifier
+from experiments.mnist import load_mnist
 
-# Get the model and the examples
-model = BlackBox() # Model should have the BlackBox interface
-corpus_inputs = get_corpus() # A tensor of corpus inputs
-test_inputs = get_test() # A set of inputs to explain
+# Get a model
+model = MnistClassifier() # Model should have the BlackBox interface
+
+# Load corpus and test inputs
+corpus_loader = load_mnist(subset_size=100, train=True, batch_size=100) # MNIST train loader
+test_loader = load_mnist(subset_size=10, train=True, batch_size=10) # MNIST test loader
+corpus_inputs, _ = next(iter(corpus_loader)) # A tensor of corpus inputs
+test_inputs, _ = next(iter(test_loader)) # A set of inputs to explain
 
 # Compute the corpus and test latent representations
-corpus_latents = model.latent_representation(corpus_inputs) 
-test_latents = model.latent_representation(test_inputs)
+corpus_latents = model.latent_representation(corpus_inputs).detach()
+test_latents = model.latent_representation(test_inputs).detach()
 
 # Initialize SimplEX, fit it on test examples
 simplex = Simplex(corpus_examples=corpus_inputs, 
@@ -50,9 +55,11 @@ We get a tensor weights that can be interpreted as follows:
 We can get the importance of each corpus feature for the decomposition 
 of a given example ``i`` in the following way:
 ```python
+import torch
+
 # Compute the Integrated Jacobian for a particular example
-i = 42
-input_baseline = get_baseline() # Baseline tensor of the same shape as corpus_inputs
+i = 4
+input_baseline = torch.zeros(corpus_inputs.shape) # Baseline tensor of the same shape as corpus_inputs
 simplex.jacobian_projections(test_id=i, model=model,
                              input_baseline=input_baseline)
 
@@ -202,5 +209,13 @@ python -m experiments.results.ar.outlier.plot_results -cv_list CV1 CV2 CV3 ...
 If you use this code, please cite the associated paper:
 
 ```
-Put citation here when ready
+@inproceedings{Crabbe2021SimplEx,
+ author={Jonathan Crabbé and Zhaozhi Qian and Fergus Imrie and Mihaela van der Schaar},
+ booktitle = {Advances in Neural Information Processing Systems},
+ eprint={2110.15355},
+ archivePrefix={arXiv},
+ primaryClass={cs.LG}
+ volume = {34},
+ year = {2021}
+}
 ```
