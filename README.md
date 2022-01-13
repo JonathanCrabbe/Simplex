@@ -60,7 +60,7 @@ import torch
 # Compute the Integrated Jacobian for a particular example
 i = 4
 input_baseline = torch.zeros(corpus_inputs.shape) # Baseline tensor of the same shape as corpus_inputs
-simplex.jacobian_projections(test_id=i, model=model,
+simplex.jacobian_projection(test_id=i, model=model,
                              input_baseline=input_baseline)
 
 result = simplex.decompose(i)
