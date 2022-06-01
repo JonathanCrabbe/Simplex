@@ -5,7 +5,7 @@ Code Author: Jonathan Crabbé ([jc2133@cam.ac.uk](mailto:jc2133@cam.ac.uk))
 
 This repository contains the implementation of SimplEx, a method to explain the latent
 representations of black-box models with the help of a corpus of examples.
-For more details, please read our [NeurIPS 2021 paper](LINK): 'Explaining Latent Representations with a Corpus of Examples'.
+For more details, please read our [NeurIPS 2021 paper]([LINK](https://papers.nips.cc/paper/2021/hash/65658fde58ab3c2b6e5132a39fae7cb9-Abstract.html)): 'Explaining Latent Representations with a Corpus of Examples'.
 
 ## Installation
 1. Clone the repository
