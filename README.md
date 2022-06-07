@@ -207,12 +207,14 @@ python -m experiments.results.ar.outlier.plot_results -cv_list CV1 CV2 CV3 ...
 If you use this code, please cite the associated paper:
 
 ```
-@inproceedings{Crabbe2021SimplEx,
- author={Jonathan Crabbé and Zhaozhi Qian and Fergus Imrie and Mihaela van der Schaar},
+@inproceedings{Crabbe2021Simplex,
+ author = {Crabbe, Jonathan and Qian, Zhaozhi and Imrie, Fergus and van der Schaar, Mihaela},
  booktitle = {Advances in Neural Information Processing Systems},
- eprint={2110.15355},
- archivePrefix={arXiv},
- primaryClass={cs.LG}
+ editor = {M. Ranzato and A. Beygelzimer and Y. Dauphin and P.S. Liang and J. Wortman Vaughan},
+ pages = {12154--12166},
+ publisher = {Curran Associates, Inc.},
+ title = {Explaining Latent Representations with a Corpus of Examples},
+ url = {https://proceedings.neurips.cc/paper/2021/file/65658fde58ab3c2b6e5132a39fae7cb9-Paper.pdf},
  volume = {34},
  year = {2021}
 }
