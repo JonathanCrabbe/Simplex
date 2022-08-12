@@ -220,6 +220,7 @@ with col3:
     show_thumb(prediction)
     if show_patient_outcome:
         label = test_targets[test_patient_id].item()
+        st.write("")
         show_thumb(label)
     else:
         pass
@@ -280,7 +281,6 @@ def df_values_to_colors(df):
         )
         lut = plt.cm.bwr(np.linspace(0.2, 0.75, 256))
         lut = np.apply_along_axis(mcolors.to_hex, 1, lut)
-        # st.write(type((norm(df[col].values) * 255).astype(np.int16)))
         a = (norm(df[col].values) * 255).astype(np.int16)
         df[col] = lut[a]
     return df

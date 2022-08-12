@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -13,10 +13,28 @@ from torch.utils.data import DataLoader
 sys.path.append("..")
 from explainers.simplex import Simplex
 from models.tabular_data import MortalityPredictor
+from models.two_linear_layers import TwoLayerMortalityPredictor
 from experiments.prostate_cancer import (
     load_seer,
     load_cutract,
     ProstateCancerDataset,
+)
+from experiments.breast_cancer import load_breast_cancer_seer
+
+# page config
+st.set_page_config(layout="wide")
+
+# Main Page
+st.write(
+    """
+# SimplEx Demo
+
+First, please select the dataset you wish to view and the model you wish
+to debug. Then in the side bar, please select a patient to review from the
+test set with the Patient ID slider. You can also change the number of
+example patients from the corpus that are displayed by adjusting the
+"Minimum Example Importance" slider.
+"""
 )
 
 
@@ -27,37 +45,38 @@ def apply_sort_order(in_list, sort_order):
         return [in_list.numpy()[idx] for idx in sort_order]
 
 
-def load_data(data_source="seer", random_seed=42, corpus_size=100):
+def load_data(data_source="breast_seer", random_seed=42, corpus_size=100):
 
     # Load corpus and test inputs
-    if data_source.lower() in ["cutract", "seer"]:
-        # LOAD DATA from file
-        prostate_load_funcs = {
-            "cutract": load_cutract(random_seed=random_seed),
-            "seer": load_seer(random_seed=random_seed),
-        }
-        X, y = prostate_load_funcs[data_source.lower()]
 
-        feature_names = X.columns
+    # LOAD DATA from file
+    data_load_funcs = {
+        "prostate_seer": load_seer(random_seed=random_seed),
+        "breast_seer": load_breast_cancer_seer(random_seed=random_seed),
+        "prostate_cutract": load_cutract(random_seed=random_seed),
+    }
+    X, y = data_load_funcs[data_source.lower()]
 
-        # Get data into shape and produce corpus
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.15, random_state=random_seed, stratify=y
-        )
+    feature_names = X.columns
 
-        train_data = ProstateCancerDataset(X_train, y_train)
+    # Get data into shape and produce corpus
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.15, random_state=random_seed, stratify=y
+    )
 
-        test_data = ProstateCancerDataset(X_test, y_test)
-        test_loader = DataLoader(test_data, batch_size=50, shuffle=False)
-        test_examples = enumerate(test_loader)
-        batch_id_test, (test_inputs, test_targets) = next(test_examples)
+    train_data = ProstateCancerDataset(X_train, y_train)
 
-        corpus_loader = DataLoader(train_data, batch_size=corpus_size, shuffle=False)
-        corpus_examples = enumerate(corpus_loader)
-        batch_id_corpus, (corpus_inputs, corpus_targets) = next(corpus_examples)
-        input_baseline = torch.median(corpus_inputs, dim=0, keepdim=True).values.expand(
-            100, -1
-        )  # Baseline tensor of the same shape as corpus_inputs
+    test_data = ProstateCancerDataset(X_test, y_test)
+    test_loader = DataLoader(test_data, batch_size=50, shuffle=False)
+    test_examples = enumerate(test_loader)
+    batch_id_test, (test_inputs, test_targets) = next(test_examples)
+
+    corpus_loader = DataLoader(train_data, batch_size=corpus_size, shuffle=False)
+    corpus_examples = enumerate(corpus_loader)
+    batch_id_corpus, (corpus_inputs, corpus_targets) = next(corpus_examples)
+    input_baseline = torch.median(corpus_inputs, dim=0, keepdim=True).values.expand(
+        100, -1
+    )  # Baseline tensor of the same shape as corpus_inputs
 
     return (
         corpus_inputs,
@@ -82,7 +101,27 @@ def get_simplex_decomposition(i, model, input_baseline):
     return result, sort_order
 
 
-data_source = "prostate_seer"
+dropdown_col1, dropdown_col2, _, _ = st.columns(4)
+with dropdown_col1:
+    data_source = st.selectbox(
+        "Dataset:", ("breast_seer", "prostate_seer", "prostate_cutract")
+    )
+with dropdown_col2:
+    model_name = st.selectbox("Model to Debug:", ("MLP", "TwoLayerLinearRegression"))
+
+st.write("## Corpus Patients")
+
+data2n_cont = {
+    "breast_seer": 4,
+    "prostate_seer": 3,
+    "prostate_cutract": 3,
+}
+
+model_name2mortalitymodel = {
+    "MLP": MortalityPredictor,
+    "TwoLayerLinearRegression": TwoLayerMortalityPredictor,
+}
+
 # Load the data
 (
     corpus_inputs,
@@ -94,9 +133,11 @@ data_source = "prostate_seer"
 ) = load_data(data_source=data_source, random_seed=42, corpus_size=100)
 
 # Get a trained model
-model = MortalityPredictor(n_cont=3)  # Model should have the BlackBox interface
+model = model_name2mortalitymodel[model_name](
+    n_cont=data2n_cont[data_source], input_feature_num=len(feature_names)
+)  # Model should have the BlackBox interface
 TRAINED_MODEL_STATE_PATH = os.path.abspath(
-    "../experiments/results/prostate/outlier/model_cv0.pth"
+    f"./resources/trained_models/{model_name}/{data_source}/model_cv1.pth"
 )
 model = load_trained_model(model, TRAINED_MODEL_STATE_PATH)
 
@@ -106,7 +147,9 @@ test_latents = model.latent_representation(test_inputs).detach()
 
 
 # Load fitted SimplEx
-with open(f"./resources/trained_models/{data_source}/simplex.pkl", "rb") as f:
+with open(
+    f"./resources/trained_models/{model_name}/{data_source}/simplex.pkl", "rb"
+) as f:
     simplex = pkl.load(f)
 
 
@@ -127,52 +170,64 @@ def user_input_features():
     example_importance_threshold = st.sidebar.slider(
         "Minimum Example Importance", 0.0, 1.0, 0.1
     )
+
+    # data = {}
+    # for feature in feature_names:
+    #     data[feature] = st.sidebar.slider(
+    #         feature,  # Feature name as displayed on webpage
+    #         X[feature].min(),  # slider start
+    #         X[feature].max()
+    #         if X[feature].max() > X[feature].min()
+    #         else X[feature].max() + 1,  # slider stop
+    #         (X[feature].max() + X[feature].min()) // 2,  # slider default
+    #     )
+
+    # discrete_feature_1 = st.sidebar.selectbox(
+    #     "discrete_feature_1", ["option1", "option2", "option3"]
+    # ) # TODO: Convert discrete feature to drop down like this
+
     return test_patient_id - 1, example_importance_threshold
 
 
 # Sidebar
 st.sidebar.header("Test Patient")
-st.sidebar.write(
-    "Please select a patient to review from the test set with the Patient ID slider. You can also change the number of example patients from the corpus by adjusting the minimum example importance slider."
-)
-(
-    test_patient_id,
-    example_importance_threshold,
-) = user_input_features()  # user input sliders
+(test_patient_id, example_importance_threshold) = user_input_features()
+
+
+def show_thumb(label):
+    if label == 0:
+        return st.image("./resources/thumb_up.png", width=40)
+    elif label == 1:
+        return st.image("./resources/thumb_down.png", width=40)
+
+
 # Test patient image and data
 
 st.sidebar.header(f"Patient number: {test_patient_id+1}")
 
+show_patient_outcome = st.sidebar.checkbox(
+    "show patient outcome", value=False, key="show_patient_outcome"
+)
 col1, col2, col3 = st.sidebar.columns(3, gap="small")
 with col1:
     st.image("./resources/patient_male.png", width=100)
 with col2:
-    st.write("Patient Outcome:")
     st.write("Patient Prediction:")
+    if show_patient_outcome:
+        st.write("Patient Outcome:")
 with col3:
-    label = test_targets[test_patient_id].item()
-    if label == 0:
-        st.image("./resources/thumb_up.png", width=40)
-    elif label == 1:
-        st.image("./resources/thumb_down.png", width=40)
     prediction = test_predictions[test_patient_id]
-    st.write("")
-    if prediction == 0:
-        st.image("./resources/thumb_up.png", width=40)
-    elif prediction == 1:
-        st.image("./resources/thumb_down.png", width=40)
+    show_thumb(prediction)
+    if show_patient_outcome:
+        label = test_targets[test_patient_id].item()
+        st.write("")
+        show_thumb(label)
+    else:
+        pass
 
 
+# Test patient sidebar
 st.sidebar.write("Patient features")
-
-# Main Page
-st.write(
-    """
-# SimplEx demonstrator
-
-This app explains your models predictions using **SimplEx**! 
-"""
-)
 
 test_patient_df = pd.DataFrame(
     [simplex.test_examples[test_patient_id].numpy()],
@@ -182,6 +237,7 @@ test_patient_df = pd.DataFrame(
 
 st.sidebar.write(test_patient_df.transpose())
 
+# Main corpus decomposition area
 result, sort_order = get_simplex_decomposition(test_patient_id, model, input_baseline)
 
 corpus_df = pd.DataFrame(
@@ -204,9 +260,20 @@ feature_df = pd.DataFrame(
     [result[j][2].numpy() for j in range(len(result))],
     columns=[f"{col}_fi" for col in feature_names],
 )
-feature_df.insert(loc=0, column="Label", value=0)
-feature_df.insert(loc=0, column="Prediction", value=0)
-feature_df.insert(loc=0, column="Example Importance", value=0)
+feature_df.insert(loc=0, column="Label", value=np.NaN)
+feature_df.insert(loc=0, column="Prediction", value=np.NaN)
+feature_df.insert(
+    loc=0,
+    column="Example Importance",
+    value=np.NaN,
+)
+
+feature_df = feature_df.loc[
+    corpus_df["Example Importance"] >= example_importance_threshold
+]
+display_df = corpus_df.loc[
+    corpus_df["Example Importance"] >= example_importance_threshold
+].copy()
 
 
 def df_values_to_colors(df, feature_names):
@@ -222,7 +289,6 @@ def df_values_to_colors(df, feature_names):
         )
         lut = plt.cm.bwr(np.linspace(0.2, 0.75, 256))
         lut = np.apply_along_axis(mcolors.to_hex, 1, lut)
-        # st.write(type((norm(df[col].values[3:]) * 255).astype(np.int16)))
         a = np.concatenate(
             ([140, 140, 140], (norm(df[col].values[3:]) * 255).astype(np.int16)),
             axis=None,
