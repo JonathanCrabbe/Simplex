@@ -168,7 +168,7 @@ test_predictions = [
 def user_input_features():
     test_patient_id = st.sidebar.slider("Patient ID", 1, 50, 1)
     example_importance_threshold = st.sidebar.slider(
-        "Minimum Example Importance", 0.0, 1.0, 0.1
+        "Minimum Example Importance", 0.0, 1.0, 0.0
     )
 
     # data = {}
@@ -314,6 +314,11 @@ feature_df_colors = feature_df_colors.applymap(lambda x: f"background-color: {x}
 display_df = corpus_df.loc[
     corpus_df["Example Importance"] >= example_importance_threshold
 ].copy()
+
+
+selected_indices = st.multiselect("Select rows:", display_df.index)
+# display_df = display_df.iloc[:, [0, 3, 4]]
+# feature_df = feature_df.iloc[:, [0, 3, 4]]
 
 
 st.write(display_df.style.apply(highlight, axis=None))
