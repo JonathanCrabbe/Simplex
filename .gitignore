@@ -123,3 +123,4 @@ experiments/time_series_toy.py
 data/*
 notebooks/*
 example_similarity/*
+*/archived*

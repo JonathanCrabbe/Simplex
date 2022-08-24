@@ -24,20 +24,12 @@ class MortalityGRU(BlackBox):
         self.fc1 = nn.Linear(hidden_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
         self.sigmoid = nn.Sigmoid()
-        self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.latent_representation(x)
         x = self.fc2(x)
         x = self.sigmoid(x)
         return x
-
-    # def init_hidden(self, batch_size):
-    #     weight = next(self.parameters()).data
-    #     hidden = (
-    #         weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
-    #     )
-    #     return hidden
 
     def latent_representation(self, x: torch.Tensor) -> torch.Tensor:
         x, h = self.gru(x)

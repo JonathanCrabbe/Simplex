@@ -16,7 +16,7 @@ st.markdown(
     a given input, it can both show you how it would treat similar examples
     and say which features in those examples it is paying most attention to.
 
-    **👈 Select a view from the sidebar** to see some examples
+    **👈 Select a data/model type from the sidebar** to see some examples
     of what SimplEx can do!
     ### Want to learn more?
     Check out the [paper](https://arxiv.org/pdf/2110.15355.pdf).

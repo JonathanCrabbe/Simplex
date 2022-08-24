@@ -14,10 +14,16 @@ sys.path.append("..")
 from explainers.simplex import Simplex
 from models.tabular_data import MortalityPredictor
 from models.two_linear_layers import TwoLayerMortalityPredictor
+from models.linear_regression import LinearRegression
+from models.recurrent_neural_net import MortalityGRU
 from experiments.prostate_cancer import (
     load_seer,
     load_cutract,
     ProstateCancerDataset,
+)
+from experiments.time_series_prostate_cancer import (
+    load_time_series_prostate_cancer,
+    TimeSeriesProstateCancerDataset,
 )
 from experiments.breast_cancer import load_breast_cancer_seer
 
@@ -45,10 +51,11 @@ def apply_sort_order(in_list, sort_order):
         return [in_list.numpy()[idx] for idx in sort_order]
 
 
-def load_data(data_source="breast_seer", random_seed=42, corpus_size=100):
+def load_data(
+    data_source="breast_seer", random_seed=42, corpus_size=100, batch_size=50
+):
 
     # Load corpus and test inputs
-
     # LOAD DATA from file
     data_load_funcs = {
         "prostate_seer": load_seer(random_seed=random_seed),
@@ -101,15 +108,26 @@ def get_simplex_decomposition(i, model, input_baseline):
     return result, sort_order
 
 
-dropdown_col1, dropdown_col2, _, _ = st.columns(4)
+dropdown_col1, dropdown_col2, _, col4 = st.columns(4)
 with dropdown_col1:
     data_source = st.selectbox(
-        "Dataset:", ("breast_seer", "prostate_seer", "prostate_cutract")
+        "Dataset:",
+        (
+            "breast_seer",
+            "prostate_seer",
+            "prostate_cutract",
+        ),
     )
-with dropdown_col2:
-    model_name = st.selectbox("Model to Debug:", ("MLP", "TwoLayerLinearRegression"))
 
-st.write("## Corpus Patients")
+with dropdown_col2:
+    model_name = st.selectbox(
+        "Predictive Model:",
+        (
+            "Multilayer Perceptron",
+            "Linear Regression",
+        ),
+    )
+st.write("## Patient Breakdown")
 
 data2n_cont = {
     "breast_seer": 4,
@@ -118,8 +136,15 @@ data2n_cont = {
 }
 
 model_name2mortalitymodel = {
-    "MLP": MortalityPredictor,
-    "TwoLayerLinearRegression": TwoLayerMortalityPredictor,
+    "Multilayer Perceptron": MortalityPredictor,
+    "Linear Regression": LinearRegression,
+    "Two Layer Linear Regression": TwoLayerMortalityPredictor,
+}
+
+model_name2trained_model_repo_name = {
+    "Multilayer Perceptron": "MLP",
+    "Linear Regression": "LinearRegression",
+    "Two Layer Linear Regression": "TwoLayerLinearRegression",
 }
 
 # Load the data
@@ -130,16 +155,18 @@ model_name2mortalitymodel = {
     test_targets,
     input_baseline,
     feature_names,
-) = load_data(data_source=data_source, random_seed=42, corpus_size=100)
+) = load_data(data_source=data_source, random_seed=42, corpus_size=100, batch_size=50)
 
 # Get a trained model
 model = model_name2mortalitymodel[model_name](
     n_cont=data2n_cont[data_source], input_feature_num=len(feature_names)
 )  # Model should have the BlackBox interface
+
 TRAINED_MODEL_STATE_PATH = os.path.abspath(
-    f"./resources/trained_models/{model_name}/{data_source}/model_cv1.pth"
+    f"./resources/trained_models/{model_name2trained_model_repo_name[model_name]}/{data_source}/model_cv1.pth"
 )
 model = load_trained_model(model, TRAINED_MODEL_STATE_PATH)
+
 
 # Compute the corpus and test latent representations
 corpus_latents = model.latent_representation(corpus_inputs).detach()
@@ -148,19 +175,20 @@ test_latents = model.latent_representation(test_inputs).detach()
 
 # Load fitted SimplEx
 with open(
-    f"./resources/trained_models/{model_name}/{data_source}/simplex.pkl", "rb"
+    f"./resources/trained_models/{model_name2trained_model_repo_name[model_name]}/{data_source}/simplex.pkl",
+    "rb",
 ) as f:
     simplex = pkl.load(f)
 
 
 # Compute corpus and test model predictions
 corpus_predictions = [
-    1 if prediction[0] < 0.5 else 0
+    1 if prediction[1] > 0.5 else 0
     for prediction in model.probabilities(corpus_inputs).detach()
 ]
 
 test_predictions = [
-    1 if prediction[0] < 0.5 else 0
+    1 if prediction[1] > 0.5 else 0
     for prediction in model.probabilities(test_inputs).detach()
 ]
 
@@ -168,30 +196,22 @@ test_predictions = [
 def user_input_features():
     test_patient_id = st.sidebar.slider("Patient ID", 1, 50, 1)
     example_importance_threshold = st.sidebar.slider(
-        "Minimum Example Importance", 0.0, 1.0, 0.0
+        "Minimum Example Importance", 0.0, 1.0, 0.1
     )
-
-    # data = {}
-    # for feature in feature_names:
-    #     data[feature] = st.sidebar.slider(
-    #         feature,  # Feature name as displayed on webpage
-    #         X[feature].min(),  # slider start
-    #         X[feature].max()
-    #         if X[feature].max() > X[feature].min()
-    #         else X[feature].max() + 1,  # slider stop
-    #         (X[feature].max() + X[feature].min()) // 2,  # slider default
-    #     )
-
-    # discrete_feature_1 = st.sidebar.selectbox(
-    #     "discrete_feature_1", ["option1", "option2", "option3"]
-    # ) # TODO: Convert discrete feature to drop down like this
-
-    return test_patient_id - 1, example_importance_threshold
+    corpus_patient_sort = st.sidebar.radio(
+        "Corpus patient feature sort:",
+        ["None", "Highest importance first", "Lowest importance first"],
+    )
+    return test_patient_id - 1, example_importance_threshold, corpus_patient_sort
 
 
 # Sidebar
 st.sidebar.header("Test Patient")
-(test_patient_id, example_importance_threshold) = user_input_features()
+(
+    test_patient_id,
+    example_importance_threshold,
+    corpus_patient_sort,
+) = user_input_features()
 
 
 def show_thumb(label):
@@ -206,15 +226,15 @@ def show_thumb(label):
 st.sidebar.header(f"Patient number: {test_patient_id+1}")
 
 show_patient_outcome = st.sidebar.checkbox(
-    "show patient outcome", value=False, key="show_patient_outcome"
+    "Show test patient Real-world Outcome", value=False, key="show_patient_outcome"
 )
 col1, col2, col3 = st.sidebar.columns(3, gap="small")
 with col1:
     st.image("./resources/patient_male.png", width=100)
 with col2:
-    st.write("Patient Prediction:")
+    st.write("Model Prediction:")
     if show_patient_outcome:
-        st.write("Patient Outcome:")
+        st.write("Real-world Outcome:")
 with col3:
     prediction = test_predictions[test_patient_id]
     show_thumb(prediction)
@@ -234,6 +254,7 @@ test_patient_df = pd.DataFrame(
     columns=feature_names,
     index=["Value"],
 )
+
 
 st.sidebar.write(test_patient_df.transpose())
 
@@ -260,14 +281,6 @@ feature_df = pd.DataFrame(
     [result[j][2].numpy() for j in range(len(result))],
     columns=[f"{col}_fi" for col in feature_names],
 )
-feature_df.insert(loc=0, column="Label", value=np.NaN)
-feature_df.insert(loc=0, column="Prediction", value=np.NaN)
-feature_df.insert(
-    loc=0,
-    column="Example Importance",
-    value=np.NaN,
-)
-
 feature_df = feature_df.loc[
     corpus_df["Example Importance"] >= example_importance_threshold
 ]
@@ -276,9 +289,8 @@ display_df = corpus_df.loc[
 ].copy()
 
 
-def df_values_to_colors(df, feature_names):
+def df_values_to_colors(df):
 
-    df = df.transpose()
     for col in df:
         # map values to colors in hex via
         # creating a hex Look up table table and apply the normalized data to it
@@ -289,37 +301,70 @@ def df_values_to_colors(df, feature_names):
         )
         lut = plt.cm.bwr(np.linspace(0.2, 0.75, 256))
         lut = np.apply_along_axis(mcolors.to_hex, 1, lut)
-        a = np.concatenate(
-            ([140, 140, 140], (norm(df[col].values[3:]) * 255).astype(np.int16)),
-            axis=None,
-        )
-        if col not in ["Example Importance", "Label", "Prediction"]:
-            df[col] = lut[a]
-        else:
-            df[col] = lut[140]
-    return df.transpose()
+        a = (norm(df[col].values) * 255).astype(np.int16)
+        df[col] = lut[a]
+    return df
 
 
 def highlight(x):
-    return pd.DataFrame(feature_df_colors.values, columns=x.columns)
+    return pd.DataFrame(feature_df_colors.values, index=x.index, columns=x.columns)
 
 
-feature_df = feature_df.loc[
-    corpus_df["Example Importance"] >= example_importance_threshold
-]
+# Display icons
+display_icon_cols = 3
+display_df = display_df.transpose()
+if len(display_df.columns) > 6:
+    display_df = display_df.iloc[:, :6].copy()
 
-feature_df_colors = df_values_to_colors(feature_df.copy(), feature_names)
-feature_df_colors = feature_df_colors.applymap(lambda x: f"background-color: {x}")
+corpus_patient_columns = st.columns(display_icon_cols)
+corpus_patient_row_number = len(display_df.columns) // display_icon_cols
+feature_df = feature_df.transpose()
 
-display_df = corpus_df.loc[
-    corpus_df["Example Importance"] >= example_importance_threshold
-].copy()
+for example_i in display_df.columns:
+    with corpus_patient_columns[example_i % display_icon_cols]:
+        st.image("./resources/patient_male.png", width=100)
+        if corpus_patient_sort == "None":
+            feature_df_colors = df_values_to_colors(feature_df[[example_i]].copy())
+        else:
+            ascending = (
+                True if corpus_patient_sort == "Lowest importance first" else False
+            )
+            feature_df_colors = df_values_to_colors(
+                feature_df[[example_i]]
+                .copy()
+                .sort_values(by=example_i, ascending=ascending)
+            )
+        feature_df_colors = feature_df_colors.applymap(
+            lambda x: f"background-color: {x}"
+        )
+        st.write(
+            f"SimplEx Example importance: {display_df.loc['Example Importance', example_i]*100:0.1f}%"
+        )
+        # # TODO: get thumb on same line as text see: https://discuss.streamlit.io/t/image-and-text-next-to-each-other/7627/17
+        st.write("Model Prediction:")
+        show_thumb(display_df.loc["Prediction", example_i])
+        st.write("Real-world Outcome:")
+        show_thumb(display_df.loc["Label", example_i])
+        with pd.option_context("display.max_colwidth", 5):
+            if corpus_patient_sort == "None":
+                styled_display_df = (
+                    display_df.drop(
+                        index=["Example Importance", "Label", "Prediction"]
+                    )[[example_i]]
+                ).style.apply(highlight, axis=None)
 
-
-selected_indices = st.multiselect("Select rows:", display_df.index)
-# display_df = display_df.iloc[:, [0, 3, 4]]
-# feature_df = feature_df.iloc[:, [0, 3, 4]]
-
-
-st.write(display_df.style.apply(highlight, axis=None))
-# st.write(feature_df)  # display importances behind colours
+            else:
+                ascending = (
+                    True if corpus_patient_sort == "Lowest importance first" else False
+                )
+                styled_display_df = (
+                    display_df.drop(
+                        index=["Example Importance", "Label", "Prediction"]
+                    )[[example_i]]
+                    .assign(s=feature_df[[example_i]].values)
+                    # .assign(s2=feature_df_colors[[example_i]].values)
+                    .sort_values(by="s", ascending=ascending)
+                    .drop("s", axis=1)
+                    # .drop("s2", axis=1)
+                ).style.apply(highlight, axis=None)
+            st.write(styled_display_df)
