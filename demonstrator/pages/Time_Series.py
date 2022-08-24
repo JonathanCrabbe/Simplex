@@ -29,6 +29,20 @@ from experiments.breast_cancer import load_breast_cancer_seer
 
 # page config
 st.set_page_config(layout="wide")
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+        width: 550px;
+    }
+    [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
+        width: 550px;
+        margin-left: -550px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Main Page
 st.write(
@@ -218,21 +232,26 @@ with col3:
         label = test_targets[test_patient_id].item()
         st.write("")
         show_thumb(label)
-    else:
-        pass
 
 
 # Test patient sidebar
 st.sidebar.write("Patient features")
-
-test_patient_df = pd.DataFrame(
-    [simplex.test_examples[test_patient_id][0].numpy()],
-    columns=feature_names,
-    index=["Value"],
+test_patient_last_time_step_idx = (
+    simplex.test_examples[test_patient_id][
+        ~np.all(simplex.test_examples[test_patient_id].numpy() == 0, axis=1)
+    ].shape[0]
+    - 1
 )
 
+test_patient_df = pd.DataFrame(
+    simplex.test_examples[test_patient_id][
+        test_patient_last_time_step_idx - 2 : test_patient_last_time_step_idx + 1, :
+    ].numpy(),
+    columns=feature_names,
+    index=["(t_max) - 2", "(t_max) - 1", "(t_max)"],
+)
 
-st.sidebar.write(test_patient_df.transpose())
+st.sidebar.write(test_patient_df.transpose().astype(float).round(4))
 
 # Main corpus decomposition area
 result, sort_order = get_simplex_decomposition(test_patient_id, model, input_baseline)
@@ -281,16 +300,21 @@ importance_data = [
 ]
 
 
-importance_data = [
-    example
-    for example in importance_data
-    if example["Example Importance"] >= example_importance_threshold
-]
 corpus_data = [
     example
     for example in corpus_data
     if example["Example Importance"] >= example_importance_threshold
 ]
+importance_data = [
+    example
+    for example in importance_data
+    if example["Example Importance"] >= example_importance_threshold
+]
+
+if len(corpus_data) == 0:
+    st.write(
+        "All corpus examples have a lower importance than the Minimum Example Importance threshold. Use the slider in the sidebar to reduce the Minimum Example Importance."
+    )
 
 
 def df_values_to_colors(df):

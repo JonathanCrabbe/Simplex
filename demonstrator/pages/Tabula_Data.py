@@ -288,6 +288,11 @@ display_df = corpus_df.loc[
     corpus_df["Example Importance"] >= example_importance_threshold
 ].copy()
 
+if len(display_df) == 0:
+    st.write(
+        "All corpus examples have a lower importance than the Minimum Example Importance threshold. Use the slider in the sidebar to reduce the Minimum Example Importance."
+    )
+
 
 def df_values_to_colors(df):
 
