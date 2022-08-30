@@ -122,5 +122,6 @@ experiments/data/*
 experiments/time_series_toy.py
 data/*
 notebooks/*
+!notebooks/*.ipynb
 example_similarity/*
 */archived*

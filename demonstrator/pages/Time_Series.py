@@ -112,7 +112,7 @@ def load_data(random_seed=42, corpus_size=100, batch_size=50):
 
 def load_trained_model(model, trained_model_state_path):
     model.load_state_dict(torch.load(trained_model_state_path))
-    # model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    model.to("cpu")
     model.eval()
     return model
 
