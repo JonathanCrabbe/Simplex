@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from models.base import BlackBox
 
 
-class MortalityPredictor(BlackBox):
+class LinearRegression(BlackBox):
     def __init__(self, n_cont: int = 3, input_feature_num=26) -> None:
         """
         Mortality predictor MLP
@@ -12,26 +12,21 @@ class MortalityPredictor(BlackBox):
         """
         super().__init__()
         self.n_cont = n_cont
-        self.lin1 = nn.Linear(input_feature_num, 200)
-        self.lin2 = nn.Linear(200, 50)
-        self.lin3 = nn.Linear(50, 2)
+        self.lin = nn.Linear(input_feature_num, 2)
         self.bn1 = nn.BatchNorm1d(self.n_cont)
-        self.drops = nn.Dropout(0.3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.latent_representation(x)
-        x = self.lin3(x)
+        x_cont, x_disc = x[:, : self.n_cont], x[:, self.n_cont :]
+        x_cont = self.bn1(x_cont)
+        x = torch.cat([x_cont, x_disc], 1)
+        x = self.lin(x)
         x = F.log_softmax(x, dim=-1)
         return x
 
     def latent_representation(self, x: torch.Tensor) -> torch.Tensor:
-        x_cont, x_disc = x[:, : self.n_cont], x[:, self.n_cont :]
-        x_cont = self.bn1(x_cont)
-        x = torch.cat([x_cont, x_disc], 1)
-        x = F.relu(self.lin1(x))
-        x = self.drops(x)
-        x = F.relu(self.lin2(x))
-        x = self.drops(x)
+        """
+        Latent space is the input space for linear regression
+        """
         return x
 
     def probabilities(self, x: torch.Tensor) -> torch.Tensor:
@@ -41,7 +36,7 @@ class MortalityPredictor(BlackBox):
         :return: probabilities
         """
         x = self.latent_representation(x)
-        x = self.lin3(x)
+        x = self.lin(x)
         x = F.softmax(x, dim=-1)
         return x
 
@@ -51,5 +46,5 @@ class MortalityPredictor(BlackBox):
         :param h: latent representations
         :return: presoftmax activations
         """
-        h = self.lin3(h)
+        h = self.lin(h)
         return h
