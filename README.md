@@ -6,9 +6,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://github.com/JonathanCrabbe/Simplex/blob/main/LICENSE)
 
 
-
-
-![image](simplex_examples.png "Examples of SimplEx explanations")
+![image](https://github.com/vanderschaarlab/Simplex/raw/main/simplex_examples.png "Examples of SimplEx explanations")
 
 Code Author: Jonathan Crabbé ([jc2133@cam.ac.uk](mailto:jc2133@cam.ac.uk))
 
