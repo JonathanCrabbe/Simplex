@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   schedule:
-    - cron:  '0 0 * * 0'
+    - cron:  '4 2 * * 2'
 
 
 jobs:
@@ -49,6 +49,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
+            pip install pip --upgrade
             pip install .[testing]
       - name: Test with pytest
         run: pytest -vvvsx -m "not slow"
