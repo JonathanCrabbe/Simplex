@@ -49,6 +49,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
+            pip install pip --upgrade
             pip install .[testing]
       - name: Test with pytest
         run: pytest -vvvsx -m "not slow"
