@@ -117,8 +117,6 @@ dmypy.json
 .idea
 
 # Simplex
-experiments/results/*
-src/simplexai/experiments/results/*
 experiments/data/*
 src/simplexai/experiments/data/*
 src/simplexai/experiments/time_series_toy.py
@@ -128,3 +126,6 @@ notebooks/*
 example_similarity/*
 */archived*
 data
+*.pth
+*.pkl
+*.pdf

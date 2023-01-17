@@ -1,7 +1,6 @@
 # SimplEx - Explaining Latent Representations with a Corpus of Examples
 
 [![Tests](https://github.com/vanderschaarlab/Simplex/actions/workflows/test.yml/badge.svg)](https://github.com/vanderschaarlab/Simplex/actions/workflows/test.yml)
-[![Downloads](https://img.shields.io/pypi/dd/simplexai)](https://pypi.org/project/simplexai/)
 [![pdf](https://img.shields.io/badge/PDF-%20NeurIPS%202021-red)](https://papers.nips.cc/paper/2021/hash/65658fde58ab3c2b6e5132a39fae7cb9-Abstract.html)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache2.0-blue.svg)](https://github.com/JonathanCrabbe/Simplex/blob/main/LICENSE)
 
